@@ -1,8 +1,10 @@
 name: Arena tracker
 
 on:
+  push:
+    branches: ["main", "master"]
   schedule:
-    - cron: "17,47 * * * *"
+    - cron: "0,30 * * * *"
   workflow_dispatch:
     inputs:
       operation:
@@ -13,8 +15,10 @@ on:
           - 立即读取官方榜单
           - 手动补录未上榜分数
           - 登记主播新ID
+          - 合并恢复完整JSON备份
+          - 合并导入历史CSV
       player:
-        description: "主播（自动读取时可忽略）"
+        description: "主播（自动读取/恢复数据时可忽略）"
         required: false
         type: choice
         options:
@@ -42,6 +46,10 @@ on:
         description: "补录备注（可留空）"
         required: false
         type: string
+      import_file:
+        description: "恢复文件路径，例如 import/arena-backup.json 或 import/S9.csv"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -54,7 +62,7 @@ concurrency:
 
 jobs:
   update:
-    if: github.event_name == 'schedule' || github.actor == github.repository_owner
+    if: github.event_name == 'schedule' || github.event_name == 'push' || github.actor == github.repository_owner
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -66,8 +74,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Initialize data files if missing
+        run: python admin.py init
+
       - name: Read official leaderboard
-        if: github.event_name == 'schedule' || inputs.operation == '立即读取官方榜单'
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.operation == '立即读取官方榜单')
         run: python tracker.py
 
       - name: Add manual score
@@ -87,17 +98,29 @@ jobs:
           NEW_ALIAS: ${{ inputs.new_alias }}
         run: python admin.py alias --player "$PLAYER" --alias "$NEW_ALIAS"
 
+      - name: Restore JSON backup by merge
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == '合并恢复完整JSON备份'
+        env:
+          IMPORT_FILE: ${{ inputs.import_file }}
+        run: python admin.py restore-json --file "$IMPORT_FILE"
+
+      - name: Import CSV history by merge
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == '合并导入历史CSV'
+        env:
+          IMPORT_FILE: ${{ inputs.import_file }}
+        run: python admin.py import-csv --file "$IMPORT_FILE"
+
       - name: Save data changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add live.json players.json
           if git diff --cached --quiet; then
-            echo "No data change"
-            exit 0
+            echo "No data file change"
+          else
+            git commit -m "Update arena data"
+            git push
           fi
-          git commit -m "Update arena data"
-          git push
 
       - name: Prepare website
         run: |
