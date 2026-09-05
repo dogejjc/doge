@@ -1,0 +1,70 @@
+{
+  "current_season": 9,
+  "snapshots": [
+    {
+      "captured_at": "2026-09-05T19:25:27+08:00",
+      "season": 9,
+      "cutoff500": 4282,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": true,
+          "rank": 20,
+          "score": 6131,
+          "matched_alias": "一本正经的稻哥"
+        },
+        "zangmu": {
+          "found": true,
+          "rank": 32,
+          "score": 5862,
+          "matched_alias": "最后一只脏牧"
+        },
+        "dayan": {
+          "found": true,
+          "rank": 15,
+          "score": 6200,
+          "matched_alias": "我爱李大燕丶"
+        },
+        "renwurenliu": {
+          "found": true,
+          "rank": 183,
+          "score": 4967,
+          "matched_alias": "人五人六"
+        }
+      }
+    },
+    {
+      "captured_at": "2026-09-05T19:56:05+08:00",
+      "season": 9,
+      "cutoff500": 4284,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": true,
+          "rank": 22,
+          "score": 6131,
+          "matched_alias": "一本正经的稻哥"
+        },
+        "zangmu": {
+          "found": true,
+          "rank": 33,
+          "score": 5862,
+          "matched_alias": "最后一只脏牧"
+        },
+        "dayan": {
+          "found": true,
+          "rank": 17,
+          "score": 6200,
+          "matched_alias": "我爱李大燕丶"
+        },
+        "renwurenliu": {
+          "found": true,
+          "rank": 189,
+          "score": 4967,
+          "matched_alias": "人五人六"
+        }
+      }
+    }
+  ],
+  "manual_records": []
+}

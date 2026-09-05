@@ -1,0 +1,29 @@
+{
+  "players": [
+    {
+      "id": "daoge",
+      "name": "一本正经的稻哥",
+      "color": "#3568e8",
+      "aliases": ["一本正经的稻哥"]
+    },
+    {
+      "id": "zangmu",
+      "name": "最后一只脏牧",
+      "color": "#e97831",
+      "aliases": ["最后一只脏牧"]
+    },
+    {
+      "id": "dayan",
+      "name": "我爱李大燕丶",
+      "color": "#8b5cf6",
+      "aliases": ["我爱李大燕丶", "我爱李大燕"]
+    },
+    {
+      "id": "renwurenliu",
+      "name": "人五人六",
+      "color": "#13a36f",
+      "aliases": ["人五人六"]
+    }
+  ],
+  "alias_history": []
+}

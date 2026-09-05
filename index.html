@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>地下竞技场主播追踪</title>
+  <style>
+    :root{--bg:#f4f6fb;--card:#fff;--ink:#182033;--muted:#68738a;--grid:#e2e6ef;--blue:#3568e8;--cut:#ed684f;--up:#13845b;--down:#cf4a4a;--shadow:0 12px 32px rgba(31,43,78,.08)}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif}button{font:inherit}main{max-width:1540px;margin:auto;padding:30px 28px 58px}
+    header{background:linear-gradient(135deg,#19233d 0%,#263760 54%,#3152a7 100%);color:#fff;border-radius:24px;padding:28px 32px 22px;box-shadow:var(--shadow)}h1{font-size:clamp(25px,3vw,38px);margin:0}
+    .tabs{display:flex;gap:8px;margin-top:22px}.tab{border:0;border-radius:11px;padding:10px 20px;background:rgba(255,255,255,.12);color:#dce5ff;cursor:pointer;font-weight:800}.tab.active{background:#fff;color:#22345e}.view{display:none}.view.active{display:block}
+    .bar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:20px 0 15px;background:#fff;padding:17px 20px;border-radius:16px;box-shadow:var(--shadow)}.bar h2{margin:0;font-size:22px}.updated{font-size:12px;color:var(--muted);text-align:right}.live-dot{display:inline-block;width:9px;height:9px;background:#17a66f;border-radius:50%;box-shadow:0 0 0 5px rgba(23,166,111,.12);margin-right:7px}
+    .status-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px}.player-card{background:#fff;border-radius:18px;padding:17px 18px;box-shadow:var(--shadow);border-top:5px solid var(--player)}.player-name{font-size:15px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.score{font-size:30px;font-weight:950;margin:12px 0 5px}.meta-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted)}.state{font-weight:850}.state.on{color:var(--up)}.state.off{color:var(--down)}.gap.up{color:var(--up)}.gap.down{color:var(--down)}
+    .section-title{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin:27px 2px 12px}.section-title h2{font-size:20px;margin:0}.section-title span{font-size:12px;color:var(--muted)}.chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}.chart-card{background:#fff;border-radius:19px;padding:17px 17px 12px;box-shadow:var(--shadow);overflow:hidden}.chart-card h3{margin:0;font-size:16px}.chart-sub{font-size:11px;color:var(--muted);margin-top:3px}.chart-card svg{width:100%;height:auto;display:block;margin-top:5px}.wide{grid-column:1/-1}.checks{display:flex;flex-wrap:wrap;gap:8px 15px}.checks label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer}.checks input{accent-color:#315bc4}.empty{height:220px;display:grid;place-items:center;color:var(--muted);font-size:13px}
+    .history-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin:20px 0}.history-stat{background:#fff;border-radius:16px;padding:17px 20px;box-shadow:var(--shadow);border-left:6px solid}.history-stat.up{border-color:var(--up)}.history-stat.down{border-color:var(--down)}.history-stat span{font-size:12px;color:var(--muted)}.history-stat b{display:block;font-size:22px;margin-top:6px}
+    #historyGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}.season{background:#fff;border-radius:19px;padding:17px 16px 12px;box-shadow:var(--shadow);overflow:hidden}.season-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.season h3{font-size:20px;margin:0}.range{font-size:11px;color:var(--muted);margin-top:3px}.badge{font-size:12px;font-weight:900;padding:7px 10px;border-radius:9px;color:#fff;white-space:nowrap}.badge.up{background:var(--up)}.badge.down{background:var(--down)}.trend{font-size:12px;color:var(--muted);border-top:1px solid #edf0f6;padding-top:9px;line-height:1.5;min-height:46px}.trend b{color:var(--ink)}
+    .axis{font-size:10px;fill:var(--muted)}.value{font-size:10.5px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:4px}.cut-label{font-size:9.5px;font-weight:850;fill:var(--cut);paint-order:stroke;stroke:#fff;stroke-width:4px}.error{background:#fff1f1;color:#a93636;border:1px solid #ffd1d1;border-radius:12px;padding:12px 15px;margin:18px 0;font-size:13px}.hidden{display:none!important}
+    @media(max-width:1100px){.status-grid{grid-template-columns:repeat(2,1fr)}#historyGrid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:700px){main{padding:14px 11px 36px}header{padding:21px 18px 17px;border-radius:18px}.tabs{margin-top:17px}.tab{flex:1;padding:9px 8px}.status-grid,.chart-grid,#historyGrid,.history-summary{grid-template-columns:1fr}.wide{grid-column:auto}.bar{align-items:flex-start}.updated{max-width:48%}.score{font-size:27px}}
+  </style>
+</head>
+<body><main>
+  <header>
+    <h1>地下竞技场主播追踪</h1>
+    <nav class="tabs"><button class="tab active" data-view="liveView">实时追踪</button><button class="tab" data-view="historyView">一本正经的稻哥 S1—S8</button></nav>
+  </header>
+
+  <section id="liveView" class="view active">
+    <div id="loadError" class="error hidden"></div>
+    <div class="bar"><h2><span class="live-dot"></span><span id="seasonLabel">当前赛季</span></h2><div class="updated" id="updated">正在读取数据…</div></div>
+    <div id="statusGrid" class="status-grid"></div>
+    <div class="section-title"><h2>个人走势</h2><span>未上榜且未补录时不生成分数点</span></div>
+    <div id="personalCharts" class="chart-grid"></div>
+    <div class="section-title"><h2>主播对比</h2><div id="playerChecks" class="checks"></div></div>
+    <div id="compareCharts" class="chart-grid"></div>
+  </section>
+
+  <section id="historyView" class="view">
+    <div class="bar"><h2>一本正经的稻哥 · S1—S8</h2></div>
+    <div class="history-summary"><div class="history-stat up"><span>确认封榜上榜</span><b>S4 · S6</b></div><div class="history-stat down"><span>封榜未进前500</span><b>S1 · S2 · S3 · S5 · S7 · S8</b></div></div>
+    <div id="historyGrid"></div>
+  </section>
+</main>
+<script>
+const NS='http://www.w3.org/2000/svg',DAY=86400000;
+const DEFAULT_CONFIG={players:[
+ {id:'daoge',name:'一本正经的稻哥',color:'#3568e8'},
+ {id:'zangmu',name:'最后一只脏牧',color:'#e97831'},
+ {id:'dayan',name:'我爱李大燕丶',color:'#8b5cf6'},
+ {id:'renwurenliu',name:'人五人六',color:'#13a36f'}
+]};
+const DEFAULT_LIVE={current_season:9,snapshots:[{captured_at:'2026-09-05T19:56:05+08:00',season:9,cutoff500:4284,leaderboard_total:500,players:{
+ daoge:{found:true,rank:22,score:6131},zangmu:{found:true,rank:33,score:5862},dayan:{found:true,rank:17,score:6200},renwurenliu:{found:true,rank:189,score:4967}
+}}],manual_records:[]};
+const HISTORY=[
+ {id:'S1',start:'2025-06-03',end:'2025-07-02',cut:6233,final:'out',startV:4700,endV:5200,vol:430,floor:4000,ceil:6750,trend:'前期快速冲高并短暂越线，后半程反复震荡，封榜前回落。',points:[['2025-06-07',5108],['2025-06-09',6274],['2025-06-15',6569],['2025-06-26',5510]]},
+ {id:'S2',start:'2025-07-02',end:'2025-09-03',cut:6497,final:'out',startV:5000,endV:5750,vol:420,floor:4300,ceil:6800,guides:[['2025-08-10',6580]],trend:'中段反复蓄力后短暂越过门槛，后期回落并逐步修复，但封榜未能守住。',points:[['2025-07-16',5625],['2025-07-22',5277],['2025-07-31',5328],['2025-08-25',5918]]},
+ {id:'S3',start:'2025-09-03',end:'2025-10-29',cut:5975,final:'out',startV:3550,endV:4900,vol:650,floor:3150,ceil:6700,trend:'低位起步后大幅拉升，一度越过门槛，末期又快速回落。',points:[['2025-09-07',3792],['2025-09-20',5025],['2025-10-03',6458],['2025-10-28',5029]]},
+ {id:'S4',start:'2025-10-29',end:'2026-01-14',cut:6069,final:'in',rank:275,startV:5450,endV:6400,vol:610,floor:3900,ceil:6650,trend:'前期震荡、中期探底，后程持续走强，最终高出门槛331分封榜。',points:[['2025-11-10',5885],['2025-12-02',4560],['2026-01-08',6066],['2026-01-14',6400]]},
+ {id:'S5',start:'2026-01-14',end:'2026-03-11',cut:6118,final:'out',startV:5000,endV:5000,vol:650,floor:3800,ceil:8330,trend:'2月初爆发式冲到约8200+，随后高位回落，末期未能守住门槛。',points:[['2026-01-24',4494],['2026-02-04',8230,'approx'],['2026-02-18',6059],['2026-02-27',5995],['2026-03-07',5153]]},
+ {id:'S6',start:'2026-03-11',end:'2026-05-06',cut:5857,final:'in',rank:186,startV:4550,endV:6347,vol:540,floor:3900,ceil:6750,trend:'前段低位拉扯，4月后明显走强，后程守在线上并成功封榜。',points:[['2026-03-22',4853],['2026-04-21',6156],['2026-05-03',6551],['2026-05-06',6347]]},
+ {id:'S7',start:'2026-05-06',end:'2026-07-01',cut:6007,final:'out',startV:3650,endV:4600,vol:430,floor:3150,ceil:6400,guides:[['2026-06-18',6180]],trend:'从3000多分逐步抬升，后段一度突破6000并越线，随后明显回撤。',points:[['2026-05-12',3816],['2026-05-25',4364],['2026-06-10',5235],['2026-06-26',4828]]},
+ {id:'S8',start:'2026-07-01',end:'2026-08-26',cut:5622,final:'out',startV:4700,endV:5350,vol:520,floor:3800,ceil:6350,trend:'中前期低位震荡，末段突然冲过门槛，随后两天快速回落479分。',points:[['2026-07-07',4997],['2026-07-24',4532],['2026-08-18',4858],['2026-08-23',5943],['2026-08-25',5464]]}
+];
+const $=s=>document.querySelector(s),fmt=n=>Number(n).toLocaleString('zh-CN'),time=s=>new Date(s).getTime(),dateLabel=t=>new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric'}).format(new Date(t));
+function svgEl(tag,attrs={},text=''){const node=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,v));if(text)node.textContent=text;return node}
+function pathFrom(points,x,y){return points.map((p,i)=>(i?'L':'M')+x(p.t).toFixed(1)+','+y(p.v).toFixed(1)).join(' ')}
+function sourceURL(file){return file}
+async function getJSON(file){const response=await fetch(sourceURL(file)+'?v='+Date.now(),{cache:'no-store'});if(!response.ok)throw new Error(`${file}读取失败`);return response.json()}
+
+document.querySelectorAll('.tab').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===button));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===button.dataset.view))}));
+
+function playerEvents(playerId,season,live){
+ const events=[];
+ live.snapshots.filter(s=>s.season===season).forEach(s=>{const p=s.players[playerId]||{};events.push({t:time(s.captured_at),v:p.found?Number(p.score):null,rank:p.rank,found:!!p.found,cut:s.cutoff500,source:'official',at:s.captured_at})});
+ live.manual_records.filter(r=>r.season===season&&r.player_id===playerId).forEach(r=>events.push({t:time(r.captured_at),v:Number(r.score),rank:null,found:false,cut:r.cutoff500,source:'manual',at:r.captured_at}));
+ return events.sort((a,b)=>a.t-b.t);
+}
+function latestSnapshot(live,season){return [...live.snapshots].reverse().find(x=>x.season===season)}
+function chartDomain(allPoints,mode){
+ const nums=allPoints.flat().map(p=>p.v).filter(Number.isFinite);
+ if(mode==='rank')return[500,1];
+ if(mode==='gap'){const lo=Math.min(-200,...nums),hi=Math.max(200,...nums),pad=Math.max(100,(hi-lo)*.12);return[Math.floor((lo-pad)/100)*100,Math.ceil((hi+pad)/100)*100]}
+ const lo=Math.min(3000,...nums),hi=Math.max(6500,...nums),pad=Math.max(250,(hi-lo)*.1);return[Math.max(0,Math.floor((lo-pad)/500)*500),Math.ceil((hi+pad)/500)*500];
+}
+function lineChart(series,{mode='score',cutoffs=[],title='',subtitle='' }={}){
+ const wrap=document.createElement('article');wrap.className='chart-card';wrap.innerHTML=`<h3>${title}</h3><div class="chart-sub">${subtitle}</div>`;
+ const numeric=series.flatMap(s=>s.points.filter(p=>Number.isFinite(p.v)));if(!numeric.length){const e=document.createElement('div');e.className='empty';e.textContent='尚无分数记录';wrap.append(e);return wrap}
+ const W=720,H=285,L=48,R=18,T=22,B=38,allTimes=numeric.map(p=>p.t).concat(cutoffs.map(p=>p.t)),rawMin=Math.min(...allTimes),rawMax=Math.max(...allTimes),x0=rawMin,x1=Math.max(rawMax,x0+DAY),x=t=>L+(t-x0)/(x1-x0)*(W-L-R);
+ const [d0,d1]=chartDomain(series.map(s=>s.points),mode),y=v=>mode==='rank'?T+(v-d1)/(d0-d1)*(H-T-B):T+(d1-v)/(d1-d0)*(H-T-B);
+ const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`});
+ for(let i=0;i<=4;i++){const value=mode==='rank'?d1+(d0-d1)*i/4:d0+(d1-d0)*i/4,py=y(value);svg.append(svgEl('line',{x1:L,x2:W-R,y1:py,y2:py,stroke:'#e2e6ef'}));svg.append(svgEl('text',{x:L-7,y:py+4,'text-anchor':'end',class:'axis'},String(Math.round(value))))}
+ [[x0,dateLabel(x0)],[(x0+x1)/2,dateLabel((x0+x1)/2)],[x1,dateLabel(x1)]].forEach(([t,label],i)=>svg.append(svgEl('text',{x:x(t),y:H-9,'text-anchor':i===0?'start':i===2?'end':'middle',class:'axis'},label)));
+ if(mode==='score'&&cutoffs.length){svg.append(svgEl('path',{d:pathFrom(cutoffs,x,y),fill:'none',stroke:'#ed684f','stroke-width':2,'stroke-dasharray':'7 6'}))}
+ if(mode==='gap'&&d0<0&&d1>0){svg.append(svgEl('line',{x1:L,x2:W-R,y1:y(0),y2:y(0),stroke:'#ed684f','stroke-width':2,'stroke-dasharray':'7 6'}))}
+ series.forEach(s=>{const pts=s.points.filter(p=>Number.isFinite(p.v));if(pts.length>1)svg.append(svgEl('path',{d:pathFrom(pts,x,y),fill:'none',stroke:s.color,'stroke-width':3.2,'stroke-linecap':'round','stroke-linejoin':'round'}));pts.forEach(p=>{const px=x(p.t),py=y(p.v);if(p.source==='manual'){const q=`${px},${py-6} ${px+6},${py} ${px},${py+6} ${px-6},${py}`;const mark=svgEl('polygon',{points:q,fill:s.color,stroke:'#fff','stroke-width':2});mark.append(svgEl('title',{},`${s.name} · ${fmt(p.v)} · 手动补录`));svg.append(mark)}else{const mark=svgEl('circle',{cx:px,cy:py,r:5,fill:s.color,stroke:'#fff','stroke-width':2});mark.append(svgEl('title',{},`${s.name} · ${mode==='rank'?'第':''}${fmt(p.v)}${mode==='score'?'分':''}`));svg.append(mark)}})});
+ wrap.append(svg);return wrap;
+}
+function renderLive(config,live){
+ const season=Number(live.current_season),snapshot=latestSnapshot(live,season);$('#seasonLabel').textContent=`S${season} 实时追踪`;$('#updated').textContent=snapshot?`最近更新 ${new Date(snapshot.captured_at).toLocaleString('zh-CN',{hour12:false})}`:'等待第一次自动记录';
+ const grid=$('#statusGrid');grid.replaceChildren();
+ config.players.forEach(player=>{const state=snapshot?.players?.[player.id]||{found:false},events=playerEvents(player.id,season,live),manual=[...events].reverse().find(e=>e.source==='manual'),score=state.found?state.score:manual?.v??null,cut=snapshot?.cutoff500??manual?.cut??null,gap=score!=null&&cut!=null?score-cut:null;const card=document.createElement('article');card.className='player-card';card.style.setProperty('--player',player.color);card.innerHTML=`<div class="player-name">${player.name}</div><div class="score">${score==null?'—':fmt(score)}</div><div class="meta-row"><span class="state ${state.found?'on':'off'}">${state.found?`第${state.rank}名`:'未在榜'}</span><span class="gap ${gap>=0?'up':'down'}">${gap==null?'暂无分数':`${gap>=0?'+':''}${fmt(gap)} 门槛`}</span></div>`;grid.append(card)});
+ const personal=$('#personalCharts');personal.replaceChildren();const cutoffPoints=(live.snapshots||[]).filter(s=>s.season===season&&Number.isFinite(s.cutoff500)).map(s=>({t:time(s.captured_at),v:Number(s.cutoff500)}));
+ config.players.forEach(player=>{const events=playerEvents(player.id,season,live).filter(e=>Number.isFinite(e.v));personal.append(lineChart([{name:player.name,color:player.color,points:events}],{title:player.name,subtitle:'分数走势',cutoffs:cutoffPoints}))});
+ const checks=$('#playerChecks');checks.replaceChildren();config.players.forEach(player=>{const label=document.createElement('label');label.innerHTML=`<input type="checkbox" data-player="${player.id}" checked><span style="color:${player.color};font-weight:800">${player.name}</span>`;checks.append(label)});
+ const drawCompare=()=>{const selected=[...checks.querySelectorAll('input:checked')].map(x=>x.dataset.player),players=config.players.filter(p=>selected.includes(p.id)),scoreSeries=players.map(p=>({name:p.name,color:p.color,points:playerEvents(p.id,season,live).filter(e=>Number.isFinite(e.v))})),gapSeries=players.map(p=>({name:p.name,color:p.color,points:playerEvents(p.id,season,live).filter(e=>Number.isFinite(e.v)&&Number.isFinite(e.cut)).map(e=>({...e,v:e.v-e.cut}))})),rankSeries=players.map(p=>({name:p.name,color:p.color,points:playerEvents(p.id,season,live).filter(e=>e.source==='official'&&e.found&&Number.isFinite(e.rank)).map(e=>({...e,v:e.rank}))}));const out=$('#compareCharts');out.replaceChildren();out.append(lineChart(scoreSeries,{title:'四主播分数对比',subtitle:'红色虚线为同期第500名门槛',cutoffs:cutoffPoints}));out.append(lineChart(gapSeries,{mode:'gap',title:'距离第500名',subtitle:'0以上为高于门槛，0以下为低于门槛'}));const rank=lineChart(rankSeries,{mode:'rank',title:'上榜排名变化',subtitle:'数值越小，排名越靠前'});rank.classList.add('wide');out.append(rank)};checks.querySelectorAll('input').forEach(x=>x.addEventListener('change',drawCompare));drawCompare();
+}
+function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return(h>>>0)/4294967295}
+function historySeries(s){const anchors=[[time(s.start+'T00:00:00Z'),s.startV],...(s.guides||[]).map(p=>[time(p[0]+'T00:00:00Z'),p[1]]),...s.points.map(p=>[time(p[0]+'T00:00:00Z'),p[1]]),[time(s.end+'T00:00:00Z'),s.endV]].sort((a,b)=>a[0]-b[0]).filter((p,i,a)=>!i||p[0]!==a[i-1][0]),out=[];for(let i=0;i<anchors.length-1;i++){const[a,av]=anchors[i],[b,bv]=anchors[i+1],days=Math.max(1,Math.round((b-a)/DAY)),seed=hash(s.id+i),cycles=days>16?2:days>7?1.35:.65;for(let d=0;d<=days;d++){if(i&&d===0)continue;const t=d/days,e=t*t*(3-2*t),base=av+(bv-av)*e,envelope=Math.sin(Math.PI*t),wave=Math.sin(2*Math.PI*cycles*t+seed*4-2)*.72+Math.sin(4*Math.PI*cycles*t+seed*7)*.28;out.push({t:a+d*DAY,v:Math.max(s.floor,Math.min(s.ceil,base+envelope*wave*s.vol))})}}return out}
+function renderHistory(){const grid=$('#historyGrid');HISTORY.forEach(s=>{const card=document.createElement('article');card.className='season';card.innerHTML=`<div class="season-head"><div><h3>${s.id}</h3><div class="range">${s.start} — ${s.end}</div></div><span class="badge ${s.final==='in'?'up':'down'}">${s.final==='in'?`封榜上榜 · 第${s.rank}名`:'封榜未上榜'}</span></div>`;const W=520,H=300,L=47,R=15,T=26,B=43,x0=time(s.start+'T00:00:00Z'),x1=time(s.end+'T00:00:00Z'),x=t=>L+(t-x0)/(x1-x0)*(W-L-R),y=v=>T+(8600-v)/(8600-2800)*(H-T-B),svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`});for(const v of [3000,4000,5000,6000,7000,8000]){svg.append(svgEl('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),stroke:'#e2e6ef'}));svg.append(svgEl('text',{x:L-7,y:y(v)+4,'text-anchor':'end',class:'axis'},v))}svg.append(svgEl('line',{x1:L,x2:W-R,y1:y(s.cut),y2:y(s.cut),stroke:'#ed684f','stroke-width':2,'stroke-dasharray':'7 6'}));svg.append(svgEl('text',{x:W-R-2,y:y(s.cut)-6,'text-anchor':'end',class:'cut-label'},`封榜线 ${fmt(s.cut)}`));const curve=historySeries(s);svg.append(svgEl('path',{d:pathFrom(curve,x,y),fill:'none',stroke:'#3568e8','stroke-width':3.2,'stroke-linecap':'round','stroke-linejoin':'round'}));[['赛季初期',x0],['赛季中段',(x0+x1)/2],['赛季结束',x1]].forEach(([label,t],i)=>svg.append(svgEl('text',{x:x(t),y:H-9,'text-anchor':i===0?'start':i===2?'end':'middle',class:'axis'},label)));s.points.forEach(p=>{const px=x(time(p[0]+'T00:00:00Z')),py=y(p[1]),approx=p[2]==='approx',col=p[1]>=s.cut?'#13845b':'#cf4a4a';if(approx){svg.append(svgEl('polygon',{points:`${px},${py-7} ${px+7},${py} ${px},${py+7} ${px-7},${py}`,fill:'#e5a625',stroke:'#fff','stroke-width':2}));svg.append(svgEl('text',{x:px+9,y:py-10,class:'value',fill:'#9a6800'},'≈8,200+'))}else{svg.append(svgEl('circle',{cx:px,cy:py,r:5.5,fill:col,stroke:'#fff','stroke-width':2.5}));svg.append(svgEl('text',{x:px,y:py-10,'text-anchor':'middle',class:'value'},fmt(p[1])))}});card.append(svg);const trend=document.createElement('div');trend.className='trend';trend.innerHTML=`<b>趋势：</b>${s.trend}`;card.append(trend);grid.append(card)})}
+async function load(){try{const[config,live]=await Promise.all([getJSON('players.json'),getJSON('live.json')]);$('#loadError').classList.add('hidden');renderLive(config,live)}catch(error){if(location.protocol==='file:'){renderLive(DEFAULT_CONFIG,DEFAULT_LIVE);$('#loadError').classList.add('hidden');return}$('#loadError').textContent='实时数据暂时无法读取：'+error.message;$('#loadError').classList.remove('hidden')}}
+renderHistory();load();setInterval(load,300000);
+</script>
+</body>
+</html>
