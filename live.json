@@ -96,6 +96,38 @@
           "matched_alias": "人五人六"
         }
       }
+    },
+    {
+      "captured_at": "2026-09-05T21:25:22+08:00",
+      "season": 9,
+      "cutoff500": 4301,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": true,
+          "rank": 23,
+          "score": 6131,
+          "matched_alias": "一本正经的稻哥"
+        },
+        "zangmu": {
+          "found": true,
+          "rank": 35,
+          "score": 5876,
+          "matched_alias": "最后一只脏牧"
+        },
+        "dayan": {
+          "found": true,
+          "rank": 19,
+          "score": 6200,
+          "matched_alias": "我爱李大燕丶"
+        },
+        "renwurenliu": {
+          "found": true,
+          "rank": 234,
+          "score": 4871,
+          "matched_alias": "人五人六"
+        }
+      }
     }
   ],
   "manual_records": []
