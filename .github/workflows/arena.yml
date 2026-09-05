@@ -1,0 +1,117 @@
+name: Arena tracker
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "要执行的操作"
+        required: true
+        type: choice
+        options:
+          - 立即读取官方榜单
+          - 手动补录未上榜分数
+          - 登记主播新ID
+      player:
+        description: "主播（自动读取时可忽略）"
+        required: false
+        type: choice
+        options:
+          - 一本正经的稻哥
+          - 最后一只脏牧
+          - 我爱李大燕丶
+          - 人五人六
+      score:
+        description: "手动补录分数"
+        required: false
+        type: string
+      recorded_at:
+        description: "记录时间，如 2026-09-06 15:30；留空为现在"
+        required: false
+        type: string
+      season:
+        description: "赛季编号；留空为当前赛季"
+        required: false
+        type: string
+      new_alias:
+        description: "主播新的完整游戏ID"
+        required: false
+        type: string
+      note:
+        description: "补录备注（可留空）"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: doge-data-writes
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.event_name == 'schedule' || github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read official leaderboard
+        if: github.event_name == 'schedule' || inputs.operation == '立即读取官方榜单'
+        run: python tracker.py
+
+      - name: Add manual score
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == '手动补录未上榜分数'
+        env:
+          PLAYER: ${{ inputs.player }}
+          SCORE: ${{ inputs.score }}
+          RECORDED_AT: ${{ inputs.recorded_at }}
+          SEASON: ${{ inputs.season }}
+          NOTE: ${{ inputs.note }}
+        run: python admin.py score --player "$PLAYER" --score "$SCORE" --time "$RECORDED_AT" --season "$SEASON" --note "$NOTE"
+
+      - name: Register new player ID
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == '登记主播新ID'
+        env:
+          PLAYER: ${{ inputs.player }}
+          NEW_ALIAS: ${{ inputs.new_alias }}
+        run: python admin.py alias --player "$PLAYER" --alias "$NEW_ALIAS"
+
+      - name: Save data changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add live.json players.json
+          if git diff --cached --quiet; then
+            echo "No data change"
+            exit 0
+          fi
+          git commit -m "Update arena data"
+          git push
+
+      - name: Prepare website
+        run: |
+          mkdir -p _site
+          cp index.html players.json live.json _site/
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Publish website
+        id: deployment
+        uses: actions/deploy-pages@v4
