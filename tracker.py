@@ -13,11 +13,24 @@ PAGE_SIZE = 25
 MAX_PAGES = 20
 FIRST_SEASON = 9
 PLAYERS_FILE = Path("players.json")
+PLAYERS_EXAMPLE_FILE = Path("players.example.json")
 LIVE_FILE = Path("live.json")
+LIVE_EXAMPLE_FILE = Path("live.example.json")
+TZ = ZoneInfo("Asia/Shanghai")
+SCHEDULE_MINUTES = [0, 30]
 
 
 def read_json(path, default):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
+
+
+def ensure_file(path, example_path, default):
+    if path.exists():
+        return
+    if example_path.exists():
+        path.write_text(example_path.read_text(encoding="utf-8"), encoding="utf-8")
+    else:
+        path.write_text(json.dumps(default, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def fetch_page(season, page, attempts=3, timeout=30):
@@ -62,11 +75,21 @@ def fetch_leaderboard(season):
         data = pages[page]
         total = max(total, int(data.get("total") or 0))
         rows.extend(data.get("list") or [])
-    cutoff = next((row.get("score") for row in rows if row.get("position") == 500), None)
-    return rows, total, cutoff
+    def rank_of(row):
+        try:
+            return int(row.get("position"))
+        except (TypeError, ValueError):
+            return None
+
+    first_row = next((row for row in rows if rank_of(row) == 1), None)
+    cutoff_row = next((row for row in rows if rank_of(row) == 500), None)
+    first_score = first_row.get("score") if first_row else None
+    first_name = first_row.get("battle_tag") if first_row else None
+    cutoff = cutoff_row.get("score") if cutoff_row else None
+    return rows, total, cutoff, first_score, first_name
 
 
-def make_snapshot(season, players, rows, total, cutoff):
+def make_snapshot(season, players, rows, total, cutoff, first_score, first_name, captured_at):
     alias_map = {}
     for player in players:
         for alias in player.get("aliases", []):
@@ -87,8 +110,10 @@ def make_snapshot(season, players, rows, total, cutoff):
             "matched_alias": row.get("battle_tag") if row else None,
         }
     return {
-        "captured_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
+        "captured_at": captured_at,
         "season": season,
+        "first_place_score": first_score,
+        "first_place_name": first_name,
         "cutoff500": cutoff,
         "leaderboard_total": total,
         "players": states,
@@ -96,27 +121,43 @@ def make_snapshot(season, players, rows, total, cutoff):
 
 
 def same_state(previous, current):
-    keys = ("season", "cutoff500", "leaderboard_total", "players")
+    keys = ("season", "first_place_score", "first_place_name", "cutoff500", "leaderboard_total", "players")
     return all(previous.get(key) == current.get(key) for key in keys)
 
 
 def main():
+    ensure_file(PLAYERS_FILE, PLAYERS_EXAMPLE_FILE, {"players": [], "alias_history": []})
+    ensure_file(LIVE_FILE, LIVE_EXAMPLE_FILE, {"current_season": FIRST_SEASON, "snapshots": [], "manual_records": []})
     config = read_json(PLAYERS_FILE, {"players": []})
     live = read_json(LIVE_FILE, {"current_season": FIRST_SEASON, "snapshots": [], "manual_records": []})
     if not config.get("players"):
         raise RuntimeError("players.json has no players")
+
+    checked_at = datetime.now(TZ).isoformat(timespec="seconds")
     season = detect_season(live)
-    rows, total, cutoff = fetch_leaderboard(season)
-    snapshot = make_snapshot(season, config["players"], rows, total, cutoff)
+    rows, total, cutoff, first_score, first_name = fetch_leaderboard(season)
+    snapshot = make_snapshot(season, config["players"], rows, total, cutoff, first_score, first_name, checked_at)
+
     live["current_season"] = season
+    live["last_checked_at"] = checked_at
+    live["schedule_minutes"] = SCHEDULE_MINUTES
     snapshots = live.setdefault("snapshots", [])
-    if snapshots and same_state(snapshots[-1], snapshot):
-        print("No leaderboard change")
-        return
+    previous = snapshots[-1] if snapshots else None
+    changed = previous is None or not same_state(previous, snapshot)
+    # Every successful check is kept. The front end collapses visually redundant flat points,
+    # while the raw history remains available for exact "previous check" and midnight comparisons.
     snapshots.append(snapshot)
+    if changed:
+        live["last_data_change_at"] = checked_at
+    elif not live.get("last_data_change_at") and previous:
+        live["last_data_change_at"] = previous.get("captured_at")
+
     live.setdefault("manual_records", [])
     LIVE_FILE.write_text(json.dumps(live, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(snapshot, ensure_ascii=False))
+    if changed:
+        print(json.dumps(snapshot, ensure_ascii=False))
+    else:
+        print(f"Leaderboard checked at {checked_at}; no leaderboard data change")
 
 
 if __name__ == "__main__":
