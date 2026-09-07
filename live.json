@@ -3154,13 +3154,47 @@
           "matched_alias": "人五人六"
         }
       }
+    },
+    {
+      "captured_at": "2026-09-07T18:38:53+08:00",
+      "season": 9,
+      "first_place_score": 7815,
+      "first_place_name": "不上七千不改名",
+      "cutoff500": 4593,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": true,
+          "rank": 185,
+          "score": 5341,
+          "matched_alias": "一本正经的稻哥"
+        },
+        "zangmu": {
+          "found": true,
+          "rank": 73,
+          "score": 5830,
+          "matched_alias": "最后一只脏牧"
+        },
+        "dayan": {
+          "found": true,
+          "rank": 22,
+          "score": 6371,
+          "matched_alias": "我爱李大燕丶"
+        },
+        "renwurenliu": {
+          "found": true,
+          "rank": 157,
+          "score": 5469,
+          "matched_alias": "人五人六"
+        }
+      }
     }
   ],
   "manual_records": [],
-  "last_checked_at": "2026-09-07T18:07:22+08:00",
+  "last_checked_at": "2026-09-07T18:38:53+08:00",
   "schedule_minutes": [
     0,
     30
   ],
-  "last_data_change_at": "2026-09-07T17:40:40+08:00"
+  "last_data_change_at": "2026-09-07T18:38:53+08:00"
 }
