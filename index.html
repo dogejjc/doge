@@ -34,7 +34,7 @@
     <div id="leaderboardStrip" class="leaderboard-strip"></div>
     <div id="statusGrid" class="status-grid"></div>
     <div class="section-title"><h2>个人走势</h2></div>
-    <div class="chart-guide">点按或拖动图表可用竖线定位时间并查看当时数据 · 默认近48小时 · 个人图中“≈”表示连续至少6小时分数未变化的时段已压缩，点击可还原真实时间 · 每张图“48h/全季”可单独切换 · 灰影＝未上榜未知 · 空心点＝手动补录</div>
+    <div class="chart-guide">点击图表进入定位模式，随后移动鼠标可连续查看，点击图外退出 · 默认近48小时 · 个人图中“≈”表示连续至少6小时分数未变化的时段已压缩，点击可还原真实时间 · 每张图“48h/全季”可单独切换 · 灰影＝未上榜未知 · 空心点＝手动补录</div>
     <div id="personalCharts" class="chart-grid"></div>
     <div class="section-title"><h2>主播对比</h2><div id="playerChecks" class="checks"></div></div>
     <div id="compareCharts" class="chart-grid"></div>
@@ -253,7 +253,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  const interactive=distinctTimes.length>=2&&rawSpan>=5*60000;
  const baseMinSpan=Math.min(fullSpan,Math.max(10*60000,Math.min(60*60000,rawSpan*.16||10*60000)));
  const resolvedRangeId=rangeId||`${mode}:${title}`,view={x0:full0,x1:full1},svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,'aria-label':title}),clipId=`plot-${++chartSeq}`;
- let rangeMode=chartRangeMode(resolvedRangeId),scope0=full0,scope1=full1,scopeSpan=fullSpan,showPoints=true,showLabels=true,compressTime=compressIdle&&idleWarp.gaps.length>0,inspectTime=null,skipInspectClick=false,inspectFrame=0,pendingInspectX=null,drag=null,panFrame=0,pendingClientX=null,inertiaFrame=0;
+ let rangeMode=chartRangeMode(resolvedRangeId),scope0=full0,scope1=full1,scopeSpan=fullSpan,showPoints=true,showLabels=true,compressTime=compressIdle&&idleWarp.gaps.length>0,inspectActive=false,inspectTime=null,skipInspectClick=false,inspectFrame=0,pendingInspectX=null,drag=null,panFrame=0,pendingClientX=null,inertiaFrame=0;
  const pointers=new Map();
  let pinch=null,lastTap={time:0,x:0,y:0},lastTouchEnd=0,touchMoved=false,velocityTime=0,lastDragSample=null;
  const rangeBtn=wrap.querySelector('[data-action="range"]'),inBtn=wrap.querySelector('[data-action="in"]'),outBtn=wrap.querySelector('[data-action="out"]'),resetBtn=wrap.querySelector('[data-action="reset"]'),pointsBtn=wrap.querySelector('[data-action="points"]'),labelsBtn=wrap.querySelector('[data-action="labels"]'),compressBtn=wrap.querySelector('[data-action="compress"]'),focusBtn=wrap.querySelector('[data-action="focus"]');
@@ -370,12 +370,12 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
   if(!interactive)return;const oldSpan=currentSpan(),newSpan=Math.min(scopeSpan,Math.max(currentMinSpan(),oldSpan*factor));if(Math.abs(newSpan-oldSpan)<1000)return;
   const ratio=Math.max(0,Math.min(1,(anchor-view.x0)/oldSpan));setView(anchor-ratio*newSpan,anchor-ratio*newSpan+newSpan);redraw();
  }
- function reset(){stopInertia();inspectTime=null;if(ACTIVE_INSPECT_CLEAR===clearInspection)ACTIVE_INSPECT_CLEAR=null;setView(scope0,scope1);redraw()}
+ function reset(){stopInertia();inspectActive=false;inspectTime=null;if(ACTIVE_INSPECT_CLEAR===clearInspection)ACTIVE_INSPECT_CLEAR=null;setView(scope0,scope1);redraw()}
  function stopInertia(){if(inertiaFrame){cancelAnimationFrame(inertiaFrame);inertiaFrame=0}}
  function clientXToRatio(clientX){const rect=svg.getBoundingClientRect(),sx=Math.max(L,Math.min(W-R,(clientX-rect.left)/rect.width*W));return Math.max(0,Math.min(1,(sx-L)/plotW))}
  function clientXToTime(clientX){const ratio=clientXToRatio(clientX),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t);return unmapT(mapT(view.x0)+ratio*(mapT(view.x1)-mapT(view.x0)))}
- function clearInspection(){if(inspectFrame){cancelAnimationFrame(inspectFrame);inspectFrame=0}pendingInspectX=null;if(!Number.isFinite(inspectTime))return;inspectTime=null;if(ACTIVE_INSPECT_CLEAR===clearInspection)ACTIVE_INSPECT_CLEAR=null;redraw()}
- function inspectAt(clientX){if(ACTIVE_INSPECT_CLEAR&&ACTIVE_INSPECT_CLEAR!==clearInspection)ACTIVE_INSPECT_CLEAR();ACTIVE_INSPECT_CLEAR=clearInspection;inspectTime=clientXToTime(clientX);redraw()}
+ function clearInspection(){if(inspectFrame){cancelAnimationFrame(inspectFrame);inspectFrame=0}pendingInspectX=null;const wasActive=inspectActive||Number.isFinite(inspectTime);inspectActive=false;inspectTime=null;if(ACTIVE_INSPECT_CLEAR===clearInspection)ACTIVE_INSPECT_CLEAR=null;if(wasActive)redraw()}
+ function inspectAt(clientX){if(ACTIVE_INSPECT_CLEAR&&ACTIVE_INSPECT_CLEAR!==clearInspection)ACTIVE_INSPECT_CLEAR();ACTIVE_INSPECT_CLEAR=clearInspection;inspectActive=true;inspectTime=clientXToTime(clientX);redraw()}
  function scheduleInspection(clientX){pendingInspectX=clientX;if(inspectFrame)return;inspectFrame=requestAnimationFrame(()=>{inspectFrame=0;if(pendingInspectX===null)return;const x=pendingInspectX;pendingInspectX=null;inspectAt(x)})}
  function applyPanFromPixels(dx,baseX0,baseX1){const rect=svg.getBoundingClientRect(),plotPx=Math.max(1,rect.width*plotW/W),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t),a=mapT(baseX0),b=mapT(baseX1),shift=-dx/plotPx*(b-a);setView(unmapT(a+shift),unmapT(b+shift))}
  function startInertia(v){
@@ -391,7 +391,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  }
  rangeBtn.onclick=()=>applyRangeMode(rangeMode==='local'?'full':'local',true);inBtn.onclick=()=>zoomAt(.68);outBtn.onclick=()=>zoomAt(1.48);resetBtn.onclick=reset;pointsBtn.onclick=()=>{showPoints=!showPoints;redraw()};labelsBtn.onclick=()=>{showLabels=!showLabels;redraw()};if(compressBtn)compressBtn.onclick=()=>{if(!idleWarp.gaps.length)return;compressTime=!compressTime;compressBtn.title=compressTime?'当前已压缩长平台；点击还原真实时间':'当前为真实时间轴；点击压缩连续至少6小时不变的平台';redraw()};
  svg.addEventListener('dblclick',e=>{if(!interactive||performance.now()-lastTouchEnd<600)return;e.preventDefault();reset()});
- svg.addEventListener('click',e=>{if(skipInspectClick){skipInspectClick=false;return}const coarse=window.matchMedia?.('(pointer:coarse)').matches||window.innerWidth<=700;if(coarse&&!wrap.classList.contains('focused')){const selected=clientXToTime(e.clientX);openFocus();requestAnimationFrame(()=>{if(ACTIVE_INSPECT_CLEAR&&ACTIVE_INSPECT_CLEAR!==clearInspection)ACTIVE_INSPECT_CLEAR();ACTIVE_INSPECT_CLEAR=clearInspection;inspectTime=selected;redraw()});return}inspectAt(e.clientX)});
+ svg.addEventListener('click',e=>{if(skipInspectClick){skipInspectClick=false;return}const coarse=window.matchMedia?.('(pointer:coarse)').matches||window.innerWidth<=700;if(coarse&&!wrap.classList.contains('focused')){const selected=clientXToTime(e.clientX);openFocus();requestAnimationFrame(()=>{if(ACTIVE_INSPECT_CLEAR&&ACTIVE_INSPECT_CLEAR!==clearInspection)ACTIVE_INSPECT_CLEAR();ACTIVE_INSPECT_CLEAR=clearInspection;inspectActive=true;inspectTime=selected;redraw()});return}inspectAt(e.clientX)});
  svg.addEventListener('pointerdown',e=>{
   if(!interactive||e.button!==0)return;const rect=svg.getBoundingClientRect(),sx=(e.clientX-rect.left)/rect.width*W;if(sx<L||sx>W-R)return;
   stopInertia();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
@@ -407,7 +407,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  svg.addEventListener('pointermove',e=>{
   if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
   if(pinch){e.preventDefault();updatePinch();return}
-  if(!drag&&(e.pointerType==='mouse'||e.pointerType==='pen')){const rect=svg.getBoundingClientRect(),sx=(e.clientX-rect.left)/rect.width*W,sy=(e.clientY-rect.top)/rect.height*H;if(sx>=L&&sx<=W-R&&sy>=T&&sy<=H-B)scheduleInspection(e.clientX);return}
+  if(!drag&&(e.pointerType==='mouse'||e.pointerType==='pen')){if(!inspectActive)return;const rect=svg.getBoundingClientRect(),sx=(e.clientX-rect.left)/rect.width*W,sy=(e.clientY-rect.top)/rect.height*H;if(sx>=L&&sx<=W-R&&sy>=T&&sy<=H-B)scheduleInspection(e.clientX);return}
   if(!drag||drag.pointerId!==e.pointerId)return;
   const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;
   if(drag.inspect){if(Math.abs(dx)>2)drag.moved=true;e.preventDefault();scheduleInspection(e.clientX);return}
