@@ -34,7 +34,7 @@
     <div id="leaderboardStrip" class="leaderboard-strip"></div>
     <div id="statusGrid" class="status-grid"></div>
     <div class="section-title"><h2>个人走势</h2></div>
-    <div class="chart-guide">默认近48小时 · 每张图“48h/全季”可单独切换 · 纵轴按当前可见区间自适应 · 红虚线＝500名门槛 · 灰影＝未上榜未知 · 空心点＝手动补录 · “字”隐藏标注</div>
+    <div class="chart-guide">默认近48小时 · 个人图中“≈”表示连续至少6小时分数未变化的时段已压缩，点击可还原真实时间 · 每张图“48h/全季”可单独切换 · 灰影＝未上榜未知 · 空心点＝手动补录</div>
     <div id="personalCharts" class="chart-grid"></div>
     <div class="section-title"><h2>主播对比</h2><div id="playerChecks" class="checks"></div></div>
     <div id="compareCharts" class="chart-grid"></div>
@@ -101,6 +101,18 @@ function collapseFlat(points){
   if(!run.length||run[run.length-1].v===p.v)run.push(p);else{flush();run=[p]}
  });
  flush();return out;
+}
+function idleTimeWarp(points,minIdle=6*60*60*1000,shownIdle=75*60*1000){
+ // 只压缩同一主播连续、官方可确认且分数完全相同的长平台；未知/未上榜和手动补录会切断平台。
+ const sorted=[...points].sort((a,b)=>a.t-b.t),gaps=[];let run=[];
+ const flush=()=>{if(run.length>1){const start=run[0].t,end=run[run.length-1].t;if(end-start>=minIdle)gaps.push({start,end,shown:Math.min(shownIdle,end-start),value:run[0].v})}run=[]};
+ sorted.forEach(p=>{
+  if(!Number.isFinite(p.v)||p.source==='manual'){flush();return}
+  if(!run.length||run[run.length-1].v===p.v)run.push(p);else{flush();run=[p]}
+ });flush();
+ const map=t=>{let out=t;for(const g of gaps){const saved=(g.end-g.start)-g.shown;if(t>=g.end)out-=saved;else if(t>g.start){out-=(t-g.start)*(saved/(g.end-g.start));break}else break}return out};
+ const unmap=w=>{let savedBefore=0;for(const g of gaps){const ws=g.start-savedBefore,we=ws+g.shown;if(w>=we)savedBefore+=(g.end-g.start)-g.shown;else if(w>ws)return g.start+(w-ws)*(g.end-g.start)/g.shown;else break}return w+savedBefore};
+ return{gaps,map,unmap};
 }
 function lineSegments(points){
  const out=[];let segment=[];
@@ -211,11 +223,12 @@ function marker(shape,px,py,color,manual,title){
 function cutoffRailText(points){
  const finite=points.filter(p=>Number.isFinite(p.v));if(!finite.length)return '';const p=finite[finite.length-1],prev=[...finite.slice(0,-1)].reverse().find(q=>q.v!==p.v);let extra='';if(prev){const d=p.v-prev.v;extra=d>0?` · ↑+${fmt(d)}`:d<0?` · ↓${fmt(Math.abs(d))}`:' · —0'}return `门槛 ${fmt(p.v)}${extra}`;
 }
-function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtitle='',labelMode='auto',rangeId='' }={}){
+function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtitle='',labelMode='auto',rangeId='',compressIdle=false }={}){
  const rawSeries=inputSeries.map(s=>({...s,shape:s.shape||SHAPES[s.id]||'circle'})),effectiveLabelMode=labelMode==='auto'?(rawSeries.length===1&&mode==='score'?'keys':'latest'):labelMode;
+ const idleWarp=compressIdle&&mode==='score'&&rawSeries.length===1?idleTimeWarp(rawSeries[0].points):{gaps:[],map:t=>t,unmap:t=>t};
  const series=rawSeries.map(s=>({...s,points:collapseFlat(s.points)})),cleanCuts=collapseFlat(cutoffs),wrap=document.createElement('article');wrap.className='chart-card';
  const sub=subtitle?`<div class="chart-sub">${subtitle}</div>`:'';
- wrap.innerHTML=`<div class="chart-head"><div><div class="chart-title-wrap"><h3>${title}</h3><button class="chart-range-btn" data-action="range" type="button" title="切换这张图的显示范围">48h</button></div>${sub}</div><div class="chart-actions"><button data-action="out" title="缩小时间范围">−</button><button data-action="in" title="放大时间范围">＋</button><button data-action="points" title="显示或隐藏采样点">•</button><button data-action="labels" title="显示或隐藏图内数值标注">字</button><button data-action="reset" title="恢复当前范围">↺</button><button data-action="focus" title="大图查看（手机推荐）">⛶</button></div></div>`;
+ wrap.innerHTML=`<div class="chart-head"><div><div class="chart-title-wrap"><h3>${title}</h3><button class="chart-range-btn" data-action="range" type="button" title="切换这张图的显示范围">48h</button></div>${sub}</div><div class="chart-actions"><button data-action="out" title="缩小时间范围">−</button><button data-action="in" title="放大时间范围">＋</button><button data-action="points" title="显示或隐藏采样点">•</button><button data-action="labels" title="显示或隐藏图内数值标注">字</button>${compressIdle?'<button data-action="compress" title="压缩或还原连续至少6小时不变的时间段">≈</button>':''}<button data-action="reset" title="恢复当前范围">↺</button><button data-action="focus" title="大图查看（手机推荐）">⛶</button></div></div>`;
  const finite=series.flatMap(s=>s.points.filter(p=>Number.isFinite(p.v)));if(!finite.length&&!bands.length){const e=document.createElement('div');e.className='empty';e.textContent=mode==='rank'?'本季暂无上榜排名':'本季暂无分数记录';wrap.append(e);return wrap}
  const W=840,H=305,L=54,T=30,B=40,hasCutoff=mode==='score'&&cleanCuts.some(p=>Number.isFinite(p.v)),needsRail=effectiveLabelMode==='latest'||hasCutoff,R=needsRail?158:30,plotW=W-L-R,railJoinX=W-R+7,railTextX=W-R+15;
  const allTimes=series.flatMap(s=>s.points.map(p=>p.t)).concat(cleanCuts.map(p=>p.t),bands.flatMap(b=>[b.start,b.end])).filter(Number.isFinite).sort((a,b)=>a-b);
@@ -226,10 +239,11 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  const interactive=distinctTimes.length>=2&&rawSpan>=5*60000;
  const baseMinSpan=Math.min(fullSpan,Math.max(10*60000,Math.min(60*60000,rawSpan*.16||10*60000)));
  const resolvedRangeId=rangeId||`${mode}:${title}`,view={x0:full0,x1:full1},svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,'aria-label':title}),clipId=`plot-${++chartSeq}`;
- let rangeMode=chartRangeMode(resolvedRangeId),scope0=full0,scope1=full1,scopeSpan=fullSpan,showPoints=true,showLabels=true,drag=null,panFrame=0,pendingClientX=null,inertiaFrame=0;
+ let rangeMode=chartRangeMode(resolvedRangeId),scope0=full0,scope1=full1,scopeSpan=fullSpan,showPoints=true,showLabels=true,compressTime=compressIdle&&idleWarp.gaps.length>0,drag=null,panFrame=0,pendingClientX=null,inertiaFrame=0;
  const pointers=new Map();
  let pinch=null,lastTap={time:0,x:0,y:0},lastTouchEnd=0,touchMoved=false,velocityTime=0,lastDragSample=null;
- const rangeBtn=wrap.querySelector('[data-action="range"]'),inBtn=wrap.querySelector('[data-action="in"]'),outBtn=wrap.querySelector('[data-action="out"]'),resetBtn=wrap.querySelector('[data-action="reset"]'),pointsBtn=wrap.querySelector('[data-action="points"]'),labelsBtn=wrap.querySelector('[data-action="labels"]'),focusBtn=wrap.querySelector('[data-action="focus"]');
+ const rangeBtn=wrap.querySelector('[data-action="range"]'),inBtn=wrap.querySelector('[data-action="in"]'),outBtn=wrap.querySelector('[data-action="out"]'),resetBtn=wrap.querySelector('[data-action="reset"]'),pointsBtn=wrap.querySelector('[data-action="points"]'),labelsBtn=wrap.querySelector('[data-action="labels"]'),compressBtn=wrap.querySelector('[data-action="compress"]'),focusBtn=wrap.querySelector('[data-action="focus"]');
+ if(compressBtn&&!idleWarp.gaps.length){compressBtn.disabled=true;compressBtn.title='当前范围内没有连续至少6小时不变的平台'}
  if(!interactive)wrap.classList.add('interaction-locked');
  let backdrop=null,escapeHandler=null;
  function closeFocus(){
@@ -267,6 +281,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
   const span=currentSpan();inBtn.disabled=!interactive||span<=currentMinSpan()+1000;outBtn.disabled=!interactive||atFull();resetBtn.disabled=!interactive||atFull();
   svg.classList.toggle('pannable',interactive&&!atFull());
   pointsBtn.setAttribute('aria-pressed',showPoints?'true':'false');labelsBtn.setAttribute('aria-pressed',showLabels?'true':'false');
+  if(compressBtn)compressBtn.setAttribute('aria-pressed',compressTime?'true':'false');
  }
  function layoutRail(items,minY=T+13,maxY=H-B-5,gap=18){
   const sorted=items.filter(Boolean).sort((a,b)=>a.ly-b.ly);if(!sorted.length)return sorted;
@@ -275,11 +290,12 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
   return sorted;
  }
  function redraw(){
-  svg.replaceChildren();const span=currentSpan(),x=t=>L+(t-view.x0)/span*plotW,visibleSeries=series.map(s=>({...s,points:visibleWithNeighbors(s.points,view.x0,view.x1)})),domainSeries=visibleSeries.map(s=>s.points.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v))),fallback=domainSeries.flat().length?domainSeries:series.map(s=>s.points.filter(p=>Number.isFinite(p.v))),visibleCuts=visibleWithNeighbors(cleanCuts,view.x0,view.x1),domainExtras=mode==='score'?visibleCuts.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v)):[],[d0,d1]=chartDomain([...fallback,domainExtras],mode),y=v=>mode==='rank'?T+(v-d1)/(d0-d1)*(H-T-B):T+(d1-v)/(d1-d0)*(H-T-B);
+  svg.replaceChildren();const span=currentSpan(),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t),mapped0=mapT(view.x0),mapped1=mapT(view.x1),mappedSpan=Math.max(1,mapped1-mapped0),x=t=>L+(mapT(t)-mapped0)/mappedSpan*plotW,visibleSeries=series.map(s=>({...s,points:visibleWithNeighbors(s.points,view.x0,view.x1)})),domainSeries=visibleSeries.map(s=>s.points.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v))),fallback=domainSeries.flat().length?domainSeries:series.map(s=>s.points.filter(p=>Number.isFinite(p.v))),visibleCuts=visibleWithNeighbors(cleanCuts,view.x0,view.x1),domainExtras=mode==='score'?visibleCuts.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v)):[],[d0,d1]=chartDomain([...fallback,domainExtras],mode),y=v=>mode==='rank'?T+(v-d1)/(d0-d1)*(H-T-B):T+(d1-v)/(d1-d0)*(H-T-B);
   const defs=svgEl('defs'),clip=svgEl('clipPath',{id:clipId});clip.append(svgEl('rect',{x:L,y:T,width:plotW,height:H-T-B}));defs.append(clip);svg.append(defs);
   for(let i=0;i<=4;i++){const value=mode==='rank'?d1+(d0-d1)*i/4:d0+(d1-d0)*i/4,py=y(value);svg.append(svgEl('line',{x1:L,x2:W-R,y1:py,y2:py,stroke:'#e2e6ef'}));svg.append(svgEl('text',{x:L-7,y:py+4,'text-anchor':'end',class:'axis'},String(Math.round(value))))}
   const label=t=>span<=2*DAY?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(t)):dateLabel(t);
-  [[view.x0,label(view.x0)],[(view.x0+view.x1)/2,label((view.x0+view.x1)/2)],[view.x1,label(view.x1)]].forEach(([t,v],i)=>svg.append(svgEl('text',{x:x(t),y:H-9,'text-anchor':i===0?'start':i===2?'end':'middle',class:'axis'},v)));
+  const middleTime=unmapT((mapped0+mapped1)/2);
+  [[view.x0,label(view.x0)],[middleTime,label(middleTime)],[view.x1,label(view.x1)]].forEach(([t,v],i)=>svg.append(svgEl('text',{x:x(t),y:H-9,'text-anchor':i===0?'start':i===2?'end':'middle',class:'axis'},v)));
   const plot=svgEl('g',{'clip-path':`url(#${clipId})`}),cuts=visibleCuts;
   bands.filter(b=>b.end>=view.x0&&b.start<=view.x1).forEach(b=>{const sx=Math.max(L,x(Math.max(b.start,view.x0))),ex=Math.min(W-R,x(Math.min(b.end,view.x1)));if(ex>sx)plot.append(svgEl('rect',{x:sx,y:T,width:ex-sx,height:H-T-B,fill:'#aeb5c2',opacity:.18}))});
   const finiteCuts=cuts.filter(p=>Number.isFinite(p.v));
@@ -291,6 +307,12 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
    lineSegments(pts).forEach(seg=>{if(seg.length>1)plot.append(svgEl('path',{d:pathFrom(seg,x,y),fill:'none',stroke:s.color,'stroke-width':3.2,'stroke-linecap':'round','stroke-linejoin':'round'}))});
    pts.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v)).forEach(p=>{const px=x(p.t),py=y(p.v),tip=tooltipText(s,p,mode);const hit=svgEl('circle',{cx:px,cy:py,r:10,fill:'transparent','pointer-events':'all'});hit.append(svgEl('title',{},tip));plot.append(hit);if(showPoints)plot.append(marker(s.shape,px,py,s.color,p.source==='manual',tip))});
   });svg.append(plot);
+  if(compressTime&&mode==='score'&&series.length===1){
+   idleWarp.gaps.filter(g=>g.end>=view.x0&&g.start<=view.x1).forEach(g=>{const a=Math.max(g.start,view.x0),b=Math.min(g.end,view.x1);if(b<=a)return;const mid=unmapT((mapT(a)+mapT(b))/2),px=x(mid),py=y(g.value),hours=(g.end-g.start)/3600000,tip=`连续约${hours.toFixed(hours<10?1:0)}小时分数未变化，横轴已压缩`;
+    const axisMark=svgEl('text',{x:px,y:H-B+15,'text-anchor':'middle',fill:'#7d879b','font-size':15,'font-weight':950},'≈');axisMark.append(svgEl('title',{},tip));svg.append(axisMark);
+    if(py>=T&&py<=H-B){const cover=svgEl('rect',{x:px-9,y:py-8,width:18,height:16,rx:5,fill:'#fff',opacity:.94});cover.append(svgEl('title',{},tip));svg.append(cover);const mark=svgEl('text',{x:px,y:py+5,'text-anchor':'middle',fill:series[0].color,'font-size':16,'font-weight':950},'≈');mark.append(svgEl('title',{},tip));svg.append(mark)}
+   });
+  }
 
   if(showLabels&&effectiveLabelMode==='keys'&&series.length===1){
    const s=series[0],pts=s.points.filter(p=>Number.isFinite(p.v)),visible=p=>p.t>=view.x0&&p.t<=view.x1,rail=[];
@@ -319,8 +341,8 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  function reset(){stopInertia();setView(scope0,scope1);redraw()}
  function stopInertia(){if(inertiaFrame){cancelAnimationFrame(inertiaFrame);inertiaFrame=0}}
  function clientXToRatio(clientX){const rect=svg.getBoundingClientRect(),sx=Math.max(L,Math.min(W-R,(clientX-rect.left)/rect.width*W));return Math.max(0,Math.min(1,(sx-L)/plotW))}
- function clientXToTime(clientX){return view.x0+clientXToRatio(clientX)*currentSpan()}
- function applyPanFromPixels(dx,baseX0,baseX1){const rect=svg.getBoundingClientRect(),plotPx=Math.max(1,rect.width*plotW/W),span=baseX1-baseX0,shift=-dx/plotPx*span;setView(baseX0+shift,baseX1+shift)}
+ function clientXToTime(clientX){const ratio=clientXToRatio(clientX),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t);return unmapT(mapT(view.x0)+ratio*(mapT(view.x1)-mapT(view.x0)))}
+ function applyPanFromPixels(dx,baseX0,baseX1){const rect=svg.getBoundingClientRect(),plotPx=Math.max(1,rect.width*plotW/W),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t),a=mapT(baseX0),b=mapT(baseX1),shift=-dx/plotPx*(b-a);setView(unmapT(a+shift),unmapT(b+shift))}
  function startInertia(v){
   stopInertia();if(!interactive||atFull()||Math.abs(v)<120)return;let velocity=v,last=performance.now();
   const step=now=>{const dt=Math.min(34,now-last);last=now;if(Math.abs(velocity)<18||atFull()){inertiaFrame=0;return}const before0=view.x0,before1=view.x1;setView(view.x0+velocity*dt,view.x1+velocity*dt);redraw();if(Math.abs(view.x0-before0)<1&&Math.abs(view.x1-before1)<1){inertiaFrame=0;return}velocity*=Math.pow(.90,dt/16.67);inertiaFrame=requestAnimationFrame(step)};
@@ -332,7 +354,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  function updatePinch(){
   if(!pinch||pointers.size<2)return;const pts=[...pointers.values()].slice(0,2),dx=pts[1].x-pts[0].x,dy=pts[1].y-pts[0].y,dist=Math.max(8,Math.hypot(dx,dy)),midX=(pts[0].x+pts[1].x)/2,ratio=clientXToRatio(midX),newSpan=Math.min(scopeSpan,Math.max(currentMinSpan(),pinch.span*pinch.dist/dist));setView(pinch.anchor-ratio*newSpan,pinch.anchor-ratio*newSpan+newSpan);redraw();
  }
- rangeBtn.onclick=()=>applyRangeMode(rangeMode==='local'?'full':'local',true);inBtn.onclick=()=>zoomAt(.68);outBtn.onclick=()=>zoomAt(1.48);resetBtn.onclick=reset;pointsBtn.onclick=()=>{showPoints=!showPoints;redraw()};labelsBtn.onclick=()=>{showLabels=!showLabels;redraw()};
+ rangeBtn.onclick=()=>applyRangeMode(rangeMode==='local'?'full':'local',true);inBtn.onclick=()=>zoomAt(.68);outBtn.onclick=()=>zoomAt(1.48);resetBtn.onclick=reset;pointsBtn.onclick=()=>{showPoints=!showPoints;redraw()};labelsBtn.onclick=()=>{showLabels=!showLabels;redraw()};if(compressBtn)compressBtn.onclick=()=>{if(!idleWarp.gaps.length)return;compressTime=!compressTime;compressBtn.title=compressTime?'当前已压缩长平台；点击还原真实时间':'当前为真实时间轴；点击压缩连续至少6小时不变的平台';redraw()};
  svg.addEventListener('dblclick',e=>{if(!interactive||performance.now()-lastTouchEnd<600)return;e.preventDefault();reset()});
  svg.addEventListener('click',()=>{const coarse=window.matchMedia?.('(pointer:coarse)').matches||window.innerWidth<=700;if(coarse&&!wrap.classList.contains('focused'))openFocus()});
  svg.addEventListener('pointerdown',e=>{
@@ -418,7 +440,7 @@ function renderLive(config,live,season){
   card.innerHTML=`<div class="player-title-row"><div class="player-name"><span class="shape-key" style="color:${player.color}">${SHAPE_TEXT[SHAPES[player.id]]}</span> ${displayPlayerName(player)}</div></div><div class="score-line"><div class="score-main">${placeBadge}<div class="score">${exact?fmt(score):'—'}</div></div><div class="score-deltas">${scoreDeltaHTML}</div></div>${knownText?`<div class="score-note">${knownText}</div>`:''}<div class="rank-line"><span class="state ${state.found?'on':'off'}">${state.found?`第 ${state.rank} 名`:'未上榜'}</span><div class="rank-deltas">${rankDeltaHTML}</div></div><div class="meta-row"><span></span><span class="gap ${Number.isFinite(gap)&&gap>=0?'up':'down'}">${gapText}</span></div>`;grid.append(card)
  });
  const personal=$('#personalCharts');personal.replaceChildren(),cutoffPoints=collapseFlat((live.snapshots||[]).filter(s=>Number(s.season)===season&&Number.isFinite(s.cutoff500)).map(s=>({t:time(s.captured_at),v:Number(s.cutoff500)})));
- config.players.forEach(player=>{const events=playerEvents(player.id,season,live);personal.append(lineChart([{id:player.id,name:player.name,color:player.color,shape:SHAPES[player.id],points:events}],{title:displayPlayerName(player),subtitle:'',cutoffs:cutoffPoints,bands:absenceBands(player.id,season,live),labelMode:'keys',rangeId:`personal:${player.id}:score`}))});
+ config.players.forEach(player=>{const events=playerEvents(player.id,season,live);personal.append(lineChart([{id:player.id,name:player.name,color:player.color,shape:SHAPES[player.id],points:events}],{title:displayPlayerName(player),subtitle:'',cutoffs:cutoffPoints,bands:absenceBands(player.id,season,live),labelMode:'keys',rangeId:`personal:${player.id}:score`,compressIdle:true}))});
  const checks=$('#playerChecks');checks.replaceChildren();config.players.forEach(player=>{const label=document.createElement('label');label.innerHTML=`<input type="checkbox" data-player="${player.id}" checked><span class="shape-key" style="color:${player.color}">${SHAPE_TEXT[SHAPES[player.id]]}</span><span style="color:${player.color};font-weight:800">${displayPlayerName(player)}</span>`;checks.append(label)});
  const drawCompare=()=>{const selected=[...checks.querySelectorAll('input:checked')].map(x=>x.dataset.player),players=config.players.filter(p=>selected.includes(p.id)),base=p=>({id:p.id,name:displayPlayerName(p),color:p.color,shape:SHAPES[p.id]}),scoreSeries=players.map(p=>({...base(p),points:playerEvents(p.id,season,live)})),gapSeries=players.map(p=>({...base(p),points:playerEvents(p.id,season,live).map(e=>Number.isFinite(e.v)&&Number.isFinite(e.cut)?({...e,v:e.v-e.cut}):({...e,v:null}))})),rankSeries=players.map(p=>({...base(p),points:playerEvents(p.id,season,live).filter(e=>e.source==='official').map(e=>e.found&&Number.isFinite(Number(e.rank))?({...e,v:Number(e.rank)}):({...e,v:null}))}));const out=$('#compareCharts');out.replaceChildren();out.append(lineChart(scoreSeries,{title:'四主播分数对比',subtitle:'',cutoffs:cutoffPoints,labelMode:'latest',rangeId:'compare:score'}));out.append(lineChart(gapSeries,{mode:'gap',title:'距离第500名',subtitle:'',labelMode:'latest',rangeId:'compare:gap'}));const rank=lineChart(rankSeries,{mode:'rank',title:'上榜排名变化',subtitle:'',labelMode:'latest',rangeId:'compare:rank'});rank.classList.add('wide');out.append(rank)};checks.querySelectorAll('input').forEach(x=>x.addEventListener('change',drawCompare));drawCompare();
 }
