@@ -340,6 +340,35 @@ def exclude_duplicate(args, actor):
     print(f"Excluded duplicate candidate: rank {excluded[0].get('rank')}, score {excluded[0].get('score')}; {len(remaining)} candidate(s) remain")
 
 
+def apply_duplicate_issue(args, actor):
+    """Apply a duplicate-name decision encoded by the public website in an owner issue."""
+    lines = [line.strip() for line in str(args.body or "").splitlines() if line.strip()]
+    if not lines or lines[0] != "DOGE_DUPLICATE_ACTION_V1":
+        raise ValueError("This issue is not a valid duplicate-name action")
+    payload = {}
+    for line in lines[1:]:
+        if "=" in line:
+            key, value = line.split("=", 1)
+            payload[key.strip()] = value.strip()
+    required = ("action", "player_id", "season", "captured_at", "score", "rank")
+    missing = [key for key in required if not payload.get(key)]
+    if missing:
+        raise ValueError(f"Duplicate-name action is missing: {', '.join(missing)}")
+    if payload["action"] not in ("select", "exclude"):
+        raise ValueError("Unknown duplicate-name action")
+    forwarded = argparse.Namespace(
+        player=payload["player_id"],
+        season=payload["season"],
+        time=payload["captured_at"],
+        score=payload["score"],
+        rank=payload["rank"],
+    )
+    if payload["action"] == "select":
+        resolve_duplicate(forwarded, actor)
+    else:
+        exclude_duplicate(forwarded, actor)
+
+
 def merge_missing(existing, incoming):
     if not isinstance(existing, dict) or not isinstance(incoming, dict):
         return existing
@@ -514,6 +543,9 @@ def main():
     exclude.add_argument("--time", default="")
     exclude.add_argument("--season", default="")
 
+    issue = sub.add_parser("duplicate-issue")
+    issue.add_argument("--body", required=True)
+
     restore = sub.add_parser("restore-json")
     restore.add_argument("--file", required=True)
     csv_import = sub.add_parser("import-csv")
@@ -533,6 +565,8 @@ def main():
         resolve_duplicate(args, actor)
     elif args.operation == "exclude-duplicate":
         exclude_duplicate(args, actor)
+    elif args.operation == "duplicate-issue":
+        apply_duplicate_issue(args, actor)
     elif args.operation == "restore-json":
         restore_json(args)
     elif args.operation == "import-csv":
