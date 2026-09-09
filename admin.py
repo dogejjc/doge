@@ -147,6 +147,199 @@ def add_alias(args, actor):
     print(f"Alias registered: {player['name']} <- {alias}")
 
 
+def resolve_duplicate(args, actor):
+    ensure_data_files()
+    config = read_json(PLAYERS_FILE)
+    live = read_json(LIVE_FILE)
+    player = find_player(config, args.player)
+    season = parse_season(args.season, live.get("current_season", 9))
+    score = int(args.score)
+    rank = int(args.rank) if str(args.rank or "").strip() else None
+    requested_time = str(args.time or "").strip()
+    snapshots = [
+        snapshot for snapshot in live.get("snapshots", [])
+        if int(snapshot.get("season", 0)) == season
+        and len(snapshot.get("players", {}).get(player["id"], {}).get("candidates", [])) > 1
+    ]
+    if requested_time:
+        target_time = parse_time(requested_time)
+        snapshots = [snapshot for snapshot in snapshots if str(snapshot.get("captured_at", ""))[:16] == target_time[:16]]
+    if not snapshots:
+        raise ValueError("No matching duplicate-name snapshot was found")
+    snapshot = snapshots[-1]
+    state = snapshot["players"][player["id"]]
+    candidates = [
+        item for item in state.get("candidates", [])
+        if int(item.get("score")) == score and (rank is None or int(item.get("rank")) == rank)
+    ]
+    if len(candidates) != 1:
+        options = ", ".join(f"第{x.get('rank')}名/{x.get('score')}分" for x in state.get("candidates", []))
+        raise ValueError(f"The score/rank must identify exactly one candidate. Available: {options}")
+    chosen = candidates[0]
+    selection_mode = getattr(args, "selection_mode", "owner")
+    if selection_mode == "owner":
+        for rule in live.get("duplicate_exclusions", []):
+            if (
+                int(rule.get("season", 0)) == season
+                and rule.get("player_id") == player["id"]
+                and int(rule.get("score")) == int(chosen.get("score"))
+                and str(rule.get("from", "")) <= str(snapshot.get("captured_at", ""))
+                and (not rule.get("until") or str(snapshot.get("captured_at", "")) < str(rule.get("until")))
+            ):
+                rule["until"] = snapshot.get("captured_at")
+    snapshot["players"][player["id"]] = {
+        "found": True,
+        "rank": chosen.get("rank"),
+        "score": chosen.get("score"),
+        "matched_alias": chosen.get("matched_alias"),
+        "candidates": state.get("candidates", []),
+        "duplicate_selection": selection_mode,
+        "resolved_duplicate": selection_mode == "owner",
+        "resolved_by": actor,
+        "resolved_at": datetime.now(TZ).isoformat(timespec="seconds"),
+    }
+    # Recalculate later automatic duplicate choices from the corrected anchor so one correction
+    # can repair the following branch instead of forcing the owner to edit every half-hour point.
+    previous_score = int(chosen.get("score"))
+    after_target = False
+    for later in live.get("snapshots", []):
+        if later is snapshot:
+            after_target = True
+            continue
+        if not after_target or int(later.get("season", 0)) != season:
+            continue
+        later_state = later.get("players", {}).get(player["id"], {})
+        later_candidates = later_state.get("candidates", [])
+        if len(later_candidates) > 1 and later_state.get("duplicate_selection") != "owner":
+            active_exclusions = [
+                rule for rule in live.get("duplicate_exclusions", [])
+                if int(rule.get("season", 0)) == season
+                and rule.get("player_id") == player["id"]
+                and str(rule.get("from", "")) <= str(later.get("captured_at", ""))
+                and (not rule.get("until") or str(later.get("captured_at", "")) < str(rule.get("until")))
+            ]
+            eligible = [
+                item for item in later_candidates
+                if not any(int(rule.get("score")) == int(item.get("score")) for rule in active_exclusions)
+            ] or later_candidates
+            next_choice = min(
+                eligible,
+                key=lambda item: (
+                    abs(int(item.get("score") or 0) - previous_score),
+                    int(item.get("rank") or 999999),
+                ),
+            )
+            later_state.update({
+                "found": True,
+                "rank": next_choice.get("rank"),
+                "score": next_choice.get("score"),
+                "matched_alias": next_choice.get("matched_alias"),
+                "duplicate_selection": "auto",
+                "duplicate_selection_reason": "closest_previous_score_after_correction",
+                "duplicate_exclusions_applied": len(later_candidates) - len(eligible),
+            })
+            previous_score = int(next_choice.get("score"))
+        elif later_state.get("found") and isinstance(later_state.get("score"), (int, float)):
+            previous_score = int(later_state.get("score"))
+    write_json(LIVE_FILE, live)
+    action = "corrected" if selection_mode == "owner" else "auto-selected after exclusion"
+    print(f"Duplicate {action}: {player['name']} = rank {chosen.get('rank')}, score {chosen.get('score')}, snapshot {snapshot.get('captured_at')}")
+
+
+def exclude_duplicate(args, actor):
+    ensure_data_files()
+    config = read_json(PLAYERS_FILE)
+    live = read_json(LIVE_FILE)
+    player = find_player(config, args.player)
+    season = parse_season(args.season, live.get("current_season", 9))
+    excluded_score = int(args.score)
+    excluded_rank = int(args.rank) if str(args.rank or "").strip() else None
+    requested_time = str(args.time or "").strip()
+    snapshots = [
+        snapshot for snapshot in live.get("snapshots", [])
+        if int(snapshot.get("season", 0)) == season
+        and len(snapshot.get("players", {}).get(player["id"], {}).get("candidates", [])) > 1
+    ]
+    if requested_time:
+        target_time = parse_time(requested_time)
+        snapshots = [snapshot for snapshot in snapshots if str(snapshot.get("captured_at", ""))[:16] == target_time[:16]]
+    if not snapshots:
+        raise ValueError("No matching duplicate-name snapshot was found")
+    snapshot = snapshots[-1]
+    candidates = snapshot["players"][player["id"]].get("candidates", [])
+    excluded = [
+        item for item in candidates
+        if int(item.get("score")) == excluded_score
+        and (excluded_rank is None or int(item.get("rank")) == excluded_rank)
+    ]
+    if len(excluded) != 1:
+        options = ", ".join(f"第{x.get('rank')}名/{x.get('score')}分" for x in candidates)
+        raise ValueError(f"The excluded score/rank must identify exactly one candidate. Available: {options}")
+    if sum(1 for item in candidates if int(item.get("score")) == excluded_score) > 1:
+        raise ValueError("Multiple same-name candidates share this score; use '更正同名账号' with the correct rank instead")
+    rules = live.setdefault("duplicate_exclusions", [])
+    rule = {
+        "season": season,
+        "player_id": player["id"],
+        "from": snapshot.get("captured_at"),
+        "score": excluded_score,
+        "candidate_rank_at_exclusion": excluded[0].get("rank"),
+        "entered_by": actor,
+        "added_at": datetime.now(TZ).isoformat(timespec="seconds"),
+    }
+    if not any(
+        int(item.get("season", 0)) == season
+        and item.get("player_id") == player["id"]
+        and item.get("from") == rule["from"]
+        and int(item.get("score")) == excluded_score
+        for item in rules
+    ):
+        rules.append(rule)
+    active_exclusions = [
+        item for item in rules
+        if int(item.get("season", 0)) == season
+        and item.get("player_id") == player["id"]
+        and str(item.get("from", "")) <= str(snapshot.get("captured_at", ""))
+        and (not item.get("until") or str(snapshot.get("captured_at", "")) < str(item.get("until")))
+    ]
+    remaining = [
+        item for item in candidates
+        if not any(int(rule_item.get("score")) == int(item.get("score")) for rule_item in active_exclusions)
+    ]
+    if not remaining:
+        raise ValueError("All duplicate-name candidates have been excluded; use '更正同名账号' to restore the correct one")
+    current_state = snapshot["players"][player["id"]]
+    current_match = next(
+        (
+            item for item in remaining
+            if int(item.get("score")) == int(current_state.get("score") or -1)
+            and int(item.get("rank")) == int(current_state.get("rank") or -1)
+        ),
+        None,
+    )
+    if current_match:
+        chosen = current_match
+    else:
+        earlier = [
+            item for item in live.get("snapshots", [])
+            if int(item.get("season", 0)) == season
+            and str(item.get("captured_at", "")) < str(snapshot.get("captured_at", ""))
+            and item.get("players", {}).get(player["id"], {}).get("found")
+        ]
+        previous_score = earlier[-1]["players"][player["id"]].get("score") if earlier else None
+        if isinstance(previous_score, (int, float)):
+            chosen = min(remaining, key=lambda item: (abs(int(item.get("score")) - int(previous_score)), int(item.get("rank") or 999999)))
+        else:
+            chosen = min(remaining, key=lambda item: int(item.get("rank") or 999999))
+    write_json(LIVE_FILE, live)
+    args.score = str(chosen.get("score"))
+    args.rank = str(chosen.get("rank"))
+    args.time = str(snapshot.get("captured_at"))
+    args.selection_mode = "owner" if len(remaining) == 1 else "auto"
+    resolve_duplicate(args, actor)
+    print(f"Excluded duplicate candidate: rank {excluded[0].get('rank')}, score {excluded[0].get('score')}; {len(remaining)} candidate(s) remain")
+
+
 def merge_missing(existing, incoming):
     if not isinstance(existing, dict) or not isinstance(incoming, dict):
         return existing
@@ -209,6 +402,17 @@ def merge_live(current, incoming):
             records.append(imported)
             seen.add(key)
     records.sort(key=lambda r: (int(r.get("season", 0)), r.get("captured_at", ""), r.get("player_id", "")))
+    exclusions = current.setdefault("duplicate_exclusions", [])
+    seen_exclusions = {
+        (int(item.get("season", 0)), item.get("player_id"), item.get("from"), item.get("score"))
+        for item in exclusions
+    }
+    for imported in incoming.get("duplicate_exclusions", []):
+        key = (int(imported.get("season", 0)), imported.get("player_id"), imported.get("from"), imported.get("score"))
+        if key not in seen_exclusions:
+            exclusions.append(imported)
+            seen_exclusions.add(key)
+    exclusions.sort(key=lambda item: (int(item.get("season", 0)), item.get("from", ""), item.get("player_id", "")))
     return current
 
 
@@ -296,6 +500,20 @@ def main():
     alias.add_argument("--player", required=True)
     alias.add_argument("--alias", required=True)
 
+    resolve = sub.add_parser("resolve-duplicate")
+    resolve.add_argument("--player", required=True)
+    resolve.add_argument("--score", required=True)
+    resolve.add_argument("--rank", default="")
+    resolve.add_argument("--time", default="")
+    resolve.add_argument("--season", default="")
+
+    exclude = sub.add_parser("exclude-duplicate")
+    exclude.add_argument("--player", required=True)
+    exclude.add_argument("--score", required=True)
+    exclude.add_argument("--rank", default="")
+    exclude.add_argument("--time", default="")
+    exclude.add_argument("--season", default="")
+
     restore = sub.add_parser("restore-json")
     restore.add_argument("--file", required=True)
     csv_import = sub.add_parser("import-csv")
@@ -311,6 +529,10 @@ def main():
         add_score(args, actor)
     elif args.operation == "alias":
         add_alias(args, actor)
+    elif args.operation == "resolve-duplicate":
+        resolve_duplicate(args, actor)
+    elif args.operation == "exclude-duplicate":
+        exclude_duplicate(args, actor)
     elif args.operation == "restore-json":
         restore_json(args)
     elif args.operation == "import-csv":

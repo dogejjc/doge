@@ -20,6 +20,7 @@
     .axis{font-size:10.5px;fill:var(--muted)}.value{font-size:10.5px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:4px}.absence-label{font-size:10px;font-weight:850;fill:#7d8493}.error{background:#fff1f1;color:#a93636;border:1px solid #ffd1d1;border-radius:12px;padding:12px 15px;margin:18px 0;font-size:13px}.hidden{display:none!important}
     @media(max-width:1100px){.status-grid,.leaderboard-strip{grid-template-columns:repeat(2,1fr)}#historyGrid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:700px){.player-card{height:auto;min-height:0;overflow:visible}.score-line{flex-wrap:wrap}.meta-row{margin-top:5px;padding-top:0}main{padding:14px 11px 36px}header{padding:21px 18px 17px;border-radius:18px}.tabs{margin-top:17px}.tab{flex:1;padding:9px 8px}.status-grid,.leaderboard-strip,.chart-grid,#historyGrid,.history-summary{grid-template-columns:1fr}.wide{grid-column:auto}.bar{align-items:flex-start;flex-direction:column}.live-tools{justify-content:flex-start}.updated{text-align:left;width:100%}.score{font-size:28px}.score-line{align-items:center}.chart-card{padding:14px 11px 10px}.chart-head{gap:7px}.chart-actions{gap:7px}.chart-actions button{width:40px;height:40px;border-radius:11px;font-size:18px}.chart-range-btn{height:34px;min-width:52px;padding:0 10px;font-size:12px}.chart-card svg{margin-top:6px;touch-action:pan-y pinch-zoom;overscroll-behavior-x:contain}.chart-card.focused{inset:max(5px,env(safe-area-inset-top)) max(5px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left));border-radius:14px;padding:10px}.chart-card.focused .chart-head{align-items:center}.chart-card.focused .chart-sub{font-size:11px}.chart-card.focused svg{height:calc(100dvh - 118px);touch-action:none!important}.section-title{align-items:flex-start;flex-direction:column}.section-title span{line-height:1.5}.chart-sub{line-height:1.45}}
+    .state.ambiguous{color:#8a5a00;background:#fff3cd}.player-card.ambiguous .score-note,.player-card.duplicate-auto .score-note{color:#8a5a00;font-weight:800}
   </style>
 </head>
 <body><main>
@@ -55,7 +56,7 @@ const DEFAULT_CONFIG={players:[
  {id:'renwurenliu',name:'人五人六',color:'#13a36f'}
 ]};
 const PLAYER_REAL_NAMES={daoge:'谭涛',dayan:'其哥',zangmu:'老中医',renwurenliu:'啦啦啦'};
-const STREAMER_PLACE_ICONS=['🥇','🥈','🥉','🧱'];
+const STREAMER_PLACE_ICONS=['🥇','🥈','🥉','🤡'];
 function displayPlayerName(player){const alias=PLAYER_REAL_NAMES[player.id];return alias&&!String(player.name).includes('（')?`${player.name}（${alias}）`:player.name}
 const DEFAULT_LIVE={current_season:9,snapshots:[{captured_at:'2026-09-05T19:56:05+08:00',season:9,cutoff500:4284,leaderboard_total:500,players:{
  daoge:{found:true,rank:22,score:6131},zangmu:{found:true,rank:33,score:5862},dayan:{found:true,rank:17,score:6200},renwurenliu:{found:true,rank:189,score:4967}
@@ -79,16 +80,17 @@ async function getJSON(file){const response=await fetch(sourceURL(file)+'?v='+Da
 document.querySelectorAll('.tab').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===button));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===button.dataset.view))}));
 
 const SHAPES={daoge:'circle',zangmu:'triangle',dayan:'diamond',renwurenliu:'square'},SHAPE_TEXT={circle:'●',triangle:'▲',diamond:'◆',square:'■'};
-let chartSeq=0,ACTIVE_FOCUS_CLOSE=null,ACTIVE_INSPECT_CLEAR=null;
+let chartSeq=0,ACTIVE_FOCUS_CLOSE=null,ACTIVE_FOCUS_RANGE_ID=null,ACTIVE_INSPECT_CLEAR=null;
 const LOCAL_CHART_WINDOW=48*60*60*1000;
 let GLOBAL_CHART_RANGE='local';
 const CHART_RANGE_OVERRIDES=new Map();
+const CHART_UI_STATE=new Map();
 function chartRangeMode(rangeId){return CHART_RANGE_OVERRIDES.get(rangeId)||GLOBAL_CHART_RANGE}
 function rangeLabel(mode){return mode==='local'?'48h':'全季'}
 function syncGlobalRangeButton(){const btn=$('#globalRangeToggle');if(!btn)return;btn.dataset.range=GLOBAL_CHART_RANGE;btn.textContent=`全部图表：${rangeLabel(GLOBAL_CHART_RANGE)}`;btn.title=GLOBAL_CHART_RANGE==='local'?'当前所有图表默认显示最近48小时；点击切换全赛季':'当前所有图表默认显示全赛季；点击切回最近48小时'}
 function playerEvents(playerId,season,live){
  const events=[];
- (live.snapshots||[]).filter(s=>Number(s.season)===season).forEach(s=>{const p=s.players?.[playerId]||{};events.push({t:time(s.captured_at),v:p.found?Number(p.score):null,rank:p.rank,found:!!p.found,cut:s.cutoff500,source:'official',at:s.captured_at})});
+ (live.snapshots||[]).filter(s=>Number(s.season)===season).forEach(s=>{const p=s.players?.[playerId]||{};events.push({t:time(s.captured_at),v:p.found?Number(p.score):null,rank:p.rank,found:!!p.found,ambiguous:!!p.ambiguous,candidates:p.candidates||[],cut:s.cutoff500,source:'official',at:s.captured_at})});
  (live.manual_records||[]).filter(r=>Number(r.season)===season&&r.player_id===playerId).forEach(r=>events.push({t:time(r.captured_at),v:Number(r.score),rank:null,found:false,cut:r.cutoff500,source:'manual',at:r.captured_at}));
  return events.sort((a,b)=>a.t-b.t);
 }
@@ -161,10 +163,11 @@ function latestCurrentManual(playerId,season,live,snapshot){
 function change(dir,amount,estimated=false){amount=Math.max(0,Math.round(Number(amount)||0));return{dir,amount,estimated}}
 function exactChange(delta){if(!Number.isFinite(delta))return null;if(delta>0)return change('up',delta);if(delta<0)return change('down',-delta);return change('flat',0)}
 function playerCurrentContext(playerId,season,live,snapshot){
- const state=snapshot?.players?.[playerId]||{found:false},manual=!state.found?latestCurrentManual(playerId,season,live,snapshot):null,exactScore=state.found&&Number.isFinite(Number(state.score))?Number(state.score):manual?Number(manual.score):null,rank=state.found&&Number.isFinite(Number(state.rank))?Number(state.rank):null,cut=Number(snapshot?.cutoff500);return{state,manual,exactScore,rank,cut:Number.isFinite(cut)?cut:null};
+ const state=snapshot?.players?.[playerId]||{found:false},manual=!state.found&&!state.ambiguous?latestCurrentManual(playerId,season,live,snapshot):null,exactScore=state.found&&Number.isFinite(Number(state.score))?Number(state.score):manual?Number(manual.score):null,rank=state.found&&Number.isFinite(Number(state.rank))?Number(state.rank):null,cut=Number(snapshot?.cutoff500);return{state,manual,exactScore,rank,cut:Number.isFinite(cut)?cut:null};
 }
 function scoreChangeAgainst(ctx,base){
  if(!base)return null;const bp=base.players?.[ctx.playerId]||{},baseFound=!!bp.found&&Number.isFinite(Number(bp.score)),baseScore=baseFound?Number(bp.score):null,baseCut=Number(base.cutoff500);
+ if(ctx.state.ambiguous)return null;
  if(Number.isFinite(ctx.exactScore)){
   if(baseFound)return exactChange(ctx.exactScore-baseScore);
   if(Number.isFinite(baseCut)){const floor=ctx.exactScore-baseCut;if(floor>0)return change('up',floor,true)}
@@ -175,6 +178,7 @@ function scoreChangeAgainst(ctx,base){
 }
 function rankChangeAgainst(ctx,base){
  if(!base)return null;const bp=base.players?.[ctx.playerId]||{},baseFound=!!bp.found&&Number.isFinite(Number(bp.rank)),baseRank=baseFound?Number(bp.rank):null;
+ if(ctx.state.ambiguous)return null;
  if(Number.isFinite(ctx.rank)){
   if(baseFound){const gain=baseRank-ctx.rank;if(gain>0)return change('up',gain);if(gain<0)return change('down',-gain);return change('flat',0)}
   const floor=500-ctx.rank;if(floor>0)return change('up',floor,true);return null;
@@ -252,19 +256,20 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  const distinctTimes=[...new Set(allTimes.map(t=>Math.round(t/60000)))];
  const interactive=distinctTimes.length>=2&&rawSpan>=5*60000;
  const baseMinSpan=Math.min(fullSpan,Math.max(10*60000,Math.min(60*60000,rawSpan*.16||10*60000)));
- const resolvedRangeId=rangeId||`${mode}:${title}`,view={x0:full0,x1:full1},svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,'aria-label':title}),clipId=`plot-${++chartSeq}`;
- let rangeMode=chartRangeMode(resolvedRangeId),scope0=full0,scope1=full1,scopeSpan=fullSpan,showPoints=true,showLabels=true,compressTime=compressIdle&&idleWarp.gaps.length>0,inspectActive=false,inspectTime=null,skipInspectClick=false,inspectFrame=0,pendingInspectX=null,drag=null,panFrame=0,pendingClientX=null,inertiaFrame=0;
+ const resolvedRangeId=rangeId||`${mode}:${title}`,savedUi=CHART_UI_STATE.get(resolvedRangeId)||{},view={x0:full0,x1:full1},svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,'aria-label':title}),clipId=`plot-${++chartSeq}`;
+ let rangeMode=chartRangeMode(resolvedRangeId),scope0=full0,scope1=full1,scopeSpan=fullSpan,showPoints=savedUi.showPoints??true,showLabels=savedUi.showLabels??true,compressTime=(savedUi.compressTime??true)&&compressIdle&&idleWarp.gaps.length>0,inspectActive=false,inspectTime=null,skipInspectClick=false,inspectFrame=0,pendingInspectX=null,drag=null,panFrame=0,pendingClientX=null,inertiaFrame=0;
  const pointers=new Map();
  let pinch=null,lastTap={time:0,x:0,y:0},lastTouchEnd=0,touchMoved=false,velocityTime=0,lastDragSample=null;
  const rangeBtn=wrap.querySelector('[data-action="range"]'),inBtn=wrap.querySelector('[data-action="in"]'),outBtn=wrap.querySelector('[data-action="out"]'),resetBtn=wrap.querySelector('[data-action="reset"]'),pointsBtn=wrap.querySelector('[data-action="points"]'),labelsBtn=wrap.querySelector('[data-action="labels"]'),compressBtn=wrap.querySelector('[data-action="compress"]'),focusBtn=wrap.querySelector('[data-action="focus"]');
  if(compressBtn&&!idleWarp.gaps.length){compressBtn.disabled=true;compressBtn.title='当前范围内没有连续至少6小时不变的平台'}
  if(!interactive)wrap.classList.add('interaction-locked');
  let backdrop=null,escapeHandler=null;
- function closeFocus(){
+ function closeFocus(preserveForRerender=false){
   if(!wrap.classList.contains('focused'))return;wrap.classList.remove('focused');document.body.classList.remove('chart-focus-open');backdrop?.remove();backdrop=null;focusBtn.textContent='⛶';focusBtn.title='大图查看（手机推荐）';if(escapeHandler)document.removeEventListener('keydown',escapeHandler);escapeHandler=null;if(ACTIVE_FOCUS_CLOSE===closeFocus)ACTIVE_FOCUS_CLOSE=null;stopInertia();redraw();
+  if(!preserveForRerender&&ACTIVE_FOCUS_RANGE_ID===resolvedRangeId)ACTIVE_FOCUS_RANGE_ID=null;
  }
  function openFocus(){
-  if(wrap.classList.contains('focused'))return;if(ACTIVE_FOCUS_CLOSE&&ACTIVE_FOCUS_CLOSE!==closeFocus)ACTIVE_FOCUS_CLOSE();backdrop=document.createElement('div');backdrop.className='chart-focus-backdrop show';backdrop.addEventListener('click',closeFocus);document.body.append(backdrop);wrap.classList.add('focused');document.body.classList.add('chart-focus-open');focusBtn.textContent='×';focusBtn.title='退出大图';ACTIVE_FOCUS_CLOSE=closeFocus;escapeHandler=e=>{if(e.key==='Escape')closeFocus()};document.addEventListener('keydown',escapeHandler);requestAnimationFrame(redraw);
+  if(wrap.classList.contains('focused'))return;if(ACTIVE_FOCUS_CLOSE&&ACTIVE_FOCUS_CLOSE!==closeFocus)ACTIVE_FOCUS_CLOSE();ACTIVE_FOCUS_RANGE_ID=resolvedRangeId;backdrop=document.createElement('div');backdrop.className='chart-focus-backdrop show';backdrop.addEventListener('click',()=>closeFocus());document.body.append(backdrop);wrap.classList.add('focused');document.body.classList.add('chart-focus-open');focusBtn.textContent='×';focusBtn.title='退出大图';ACTIVE_FOCUS_CLOSE=closeFocus;escapeHandler=e=>{if(e.key==='Escape')closeFocus()};document.addEventListener('keydown',escapeHandler);requestAnimationFrame(redraw);
  }
  focusBtn.onclick=()=>wrap.classList.contains('focused')?closeFocus():openFocus();
  function rangeBounds(which){
@@ -280,11 +285,13 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
   if(a<scope0){a=scope0;b=a+span}if(b>scope1){b=scope1;a=b-span}
   view.x0=a;view.x1=b;
  }
- function applyRangeMode(which,remember=true){
+ function rememberUi(){CHART_UI_STATE.set(resolvedRangeId,{showPoints,showLabels,compressTime,view:{x0:view.x0,x1:view.x1},rangeMode})}
+ function applyRangeMode(which,remember=true,restoreView=null){
   rangeMode=which==='full'?'full':'local';[scope0,scope1]=rangeBounds(rangeMode);scopeSpan=scope1-scope0;setView(scope0,scope1);
+  if(restoreView&&Number.isFinite(restoreView.x0)&&Number.isFinite(restoreView.x1))setView(restoreView.x0,restoreView.x1);
   rangeBtn.dataset.range=rangeMode;rangeBtn.textContent=rangeLabel(rangeMode);rangeBtn.title=rangeMode==='local'?'当前：最近48小时（点此切换全赛季）':'当前：全赛季（点此切回最近48小时）';
   if(remember){if(rangeMode===GLOBAL_CHART_RANGE)CHART_RANGE_OVERRIDES.delete(resolvedRangeId);else CHART_RANGE_OVERRIDES.set(resolvedRangeId,rangeMode)}
-  redraw();
+  redraw();rememberUi();
  }
  function visibleAnchor(){
   const times=series.flatMap(s=>s.points.filter(p=>Number.isFinite(p.v)&&p.t>=view.x0&&p.t<=view.x1).map(p=>p.t)).sort((a,b)=>a-b);
@@ -305,7 +312,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  }
  function inspectionPoint(points,t){let found=null;for(const p of points){if(p.t>t)break;found=p}return found}
  function inspectionValue(p){
-  if(!p||!Number.isFinite(p.v))return '未上榜';
+  if(!p||!Number.isFinite(p.v))return p?.ambiguous?'同名待确认':'未上榜';
   if(mode==='rank')return `第${fmt(p.v)}名`;
   if(mode==='gap')return `${p.v>=0?'+':''}${fmt(p.v)}分`;
   const rank=Number.isFinite(Number(p.rank))?` · 第${fmt(p.rank)}名`:'',manual=p.source==='manual'?' · 补录':'';return `${fmt(p.v)}分${rank}${manual}`;
@@ -368,28 +375,28 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  }
  function zoomAt(factor,anchor=visibleAnchor()){
   if(!interactive)return;const oldSpan=currentSpan(),newSpan=Math.min(scopeSpan,Math.max(currentMinSpan(),oldSpan*factor));if(Math.abs(newSpan-oldSpan)<1000)return;
-  const ratio=Math.max(0,Math.min(1,(anchor-view.x0)/oldSpan));setView(anchor-ratio*newSpan,anchor-ratio*newSpan+newSpan);redraw();
+  const ratio=Math.max(0,Math.min(1,(anchor-view.x0)/oldSpan));setView(anchor-ratio*newSpan,anchor-ratio*newSpan+newSpan);redraw();rememberUi();
  }
- function reset(){stopInertia();inspectActive=false;inspectTime=null;if(ACTIVE_INSPECT_CLEAR===clearInspection)ACTIVE_INSPECT_CLEAR=null;setView(scope0,scope1);redraw()}
+ function reset(){stopInertia();inspectActive=false;inspectTime=null;if(ACTIVE_INSPECT_CLEAR===clearInspection)ACTIVE_INSPECT_CLEAR=null;setView(scope0,scope1);redraw();rememberUi()}
  function stopInertia(){if(inertiaFrame){cancelAnimationFrame(inertiaFrame);inertiaFrame=0}}
  function clientXToRatio(clientX){const rect=svg.getBoundingClientRect(),sx=Math.max(L,Math.min(W-R,(clientX-rect.left)/rect.width*W));return Math.max(0,Math.min(1,(sx-L)/plotW))}
  function clientXToTime(clientX){const ratio=clientXToRatio(clientX),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t);return unmapT(mapT(view.x0)+ratio*(mapT(view.x1)-mapT(view.x0)))}
  function clearInspection(){if(inspectFrame){cancelAnimationFrame(inspectFrame);inspectFrame=0}pendingInspectX=null;const wasActive=inspectActive||Number.isFinite(inspectTime);inspectActive=false;inspectTime=null;if(ACTIVE_INSPECT_CLEAR===clearInspection)ACTIVE_INSPECT_CLEAR=null;if(wasActive)redraw()}
  function inspectAt(clientX){if(ACTIVE_INSPECT_CLEAR&&ACTIVE_INSPECT_CLEAR!==clearInspection)ACTIVE_INSPECT_CLEAR();ACTIVE_INSPECT_CLEAR=clearInspection;inspectActive=true;inspectTime=clientXToTime(clientX);redraw()}
  function scheduleInspection(clientX){pendingInspectX=clientX;if(inspectFrame)return;inspectFrame=requestAnimationFrame(()=>{inspectFrame=0;if(pendingInspectX===null)return;const x=pendingInspectX;pendingInspectX=null;inspectAt(x)})}
- function applyPanFromPixels(dx,baseX0,baseX1){const rect=svg.getBoundingClientRect(),plotPx=Math.max(1,rect.width*plotW/W),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t),a=mapT(baseX0),b=mapT(baseX1),shift=-dx/plotPx*(b-a);setView(unmapT(a+shift),unmapT(b+shift))}
+ function applyPanFromPixels(dx,baseX0,baseX1){const rect=svg.getBoundingClientRect(),plotPx=Math.max(1,rect.width*plotW/W),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t),a=mapT(baseX0),b=mapT(baseX1),shift=-dx/plotPx*(b-a);setView(unmapT(a+shift),unmapT(b+shift));rememberUi()}
  function startInertia(v){
   stopInertia();if(!interactive||atFull()||Math.abs(v)<120)return;let velocity=v,last=performance.now();
-  const step=now=>{const dt=Math.min(34,now-last);last=now;if(Math.abs(velocity)<18||atFull()){inertiaFrame=0;return}const before0=view.x0,before1=view.x1;setView(view.x0+velocity*dt,view.x1+velocity*dt);redraw();if(Math.abs(view.x0-before0)<1&&Math.abs(view.x1-before1)<1){inertiaFrame=0;return}velocity*=Math.pow(.90,dt/16.67);inertiaFrame=requestAnimationFrame(step)};
+  const step=now=>{const dt=Math.min(34,now-last);last=now;if(Math.abs(velocity)<18||atFull()){inertiaFrame=0;return}const before0=view.x0,before1=view.x1;setView(view.x0+velocity*dt,view.x1+velocity*dt);redraw();rememberUi();if(Math.abs(view.x0-before0)<1&&Math.abs(view.x1-before1)<1){inertiaFrame=0;return}velocity*=Math.pow(.90,dt/16.67);inertiaFrame=requestAnimationFrame(step)};
   inertiaFrame=requestAnimationFrame(step);
  }
  function beginPinch(){
   if(!interactive||pointers.size<2)return;stopInertia();const pts=[...pointers.values()].slice(0,2),dx=pts[1].x-pts[0].x,dy=pts[1].y-pts[0].y,dist=Math.max(8,Math.hypot(dx,dy)),midX=(pts[0].x+pts[1].x)/2,span=currentSpan();pinch={dist,span,anchor:clientXToTime(midX)};drag=null;touchMoved=true;svg.classList.add('dragging');
  }
  function updatePinch(){
-  if(!pinch||pointers.size<2)return;const pts=[...pointers.values()].slice(0,2),dx=pts[1].x-pts[0].x,dy=pts[1].y-pts[0].y,dist=Math.max(8,Math.hypot(dx,dy)),midX=(pts[0].x+pts[1].x)/2,ratio=clientXToRatio(midX),newSpan=Math.min(scopeSpan,Math.max(currentMinSpan(),pinch.span*pinch.dist/dist));setView(pinch.anchor-ratio*newSpan,pinch.anchor-ratio*newSpan+newSpan);redraw();
+  if(!pinch||pointers.size<2)return;const pts=[...pointers.values()].slice(0,2),dx=pts[1].x-pts[0].x,dy=pts[1].y-pts[0].y,dist=Math.max(8,Math.hypot(dx,dy)),midX=(pts[0].x+pts[1].x)/2,ratio=clientXToRatio(midX),newSpan=Math.min(scopeSpan,Math.max(currentMinSpan(),pinch.span*pinch.dist/dist));setView(pinch.anchor-ratio*newSpan,pinch.anchor-ratio*newSpan+newSpan);redraw();rememberUi();
  }
- rangeBtn.onclick=()=>applyRangeMode(rangeMode==='local'?'full':'local',true);inBtn.onclick=()=>zoomAt(.68);outBtn.onclick=()=>zoomAt(1.48);resetBtn.onclick=reset;pointsBtn.onclick=()=>{showPoints=!showPoints;redraw()};labelsBtn.onclick=()=>{showLabels=!showLabels;redraw()};if(compressBtn)compressBtn.onclick=()=>{if(!idleWarp.gaps.length)return;compressTime=!compressTime;compressBtn.title=compressTime?'当前已压缩长平台；点击还原真实时间':'当前为真实时间轴；点击压缩连续至少6小时不变的平台';redraw()};
+ rangeBtn.onclick=()=>applyRangeMode(rangeMode==='local'?'full':'local',true);inBtn.onclick=()=>zoomAt(.68);outBtn.onclick=()=>zoomAt(1.48);resetBtn.onclick=reset;pointsBtn.onclick=()=>{showPoints=!showPoints;redraw();rememberUi()};labelsBtn.onclick=()=>{showLabels=!showLabels;redraw();rememberUi()};if(compressBtn)compressBtn.onclick=()=>{if(!idleWarp.gaps.length)return;compressTime=!compressTime;compressBtn.title=compressTime?'当前已压缩长平台；点击还原真实时间':'当前为真实时间轴；点击压缩连续至少6小时不变的平台';redraw();rememberUi()};
  svg.addEventListener('dblclick',e=>{if(!interactive||performance.now()-lastTouchEnd<600)return;e.preventDefault();reset()});
  svg.addEventListener('click',e=>{if(skipInspectClick){skipInspectClick=false;return}const coarse=window.matchMedia?.('(pointer:coarse)').matches||window.innerWidth<=700;if(coarse&&!wrap.classList.contains('focused')){const selected=clientXToTime(e.clientX);openFocus();requestAnimationFrame(()=>{if(ACTIVE_INSPECT_CLEAR&&ACTIVE_INSPECT_CLEAR!==clearInspection)ACTIVE_INSPECT_CLEAR();ACTIVE_INSPECT_CLEAR=clearInspection;inspectActive=true;inspectTime=selected;redraw()});return}inspectAt(e.clientX)});
  svg.addEventListener('pointerdown',e=>{
@@ -436,9 +443,10 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  svg.addEventListener('touchmove',e=>{if(wrap.classList.contains('focused'))e.preventDefault()},{passive:false});
  ['gesturestart','gesturechange','gestureend'].forEach(type=>svg.addEventListener(type,e=>{if(wrap.classList.contains('focused'))e.preventDefault()},{passive:false}));
  const outsideInspection=e=>{if(!wrap.isConnected){document.removeEventListener('pointerdown',outsideInspection);return}if(!wrap.contains(e.target))clearInspection()};document.addEventListener('pointerdown',outsideInspection);
- applyRangeMode(rangeMode,false);wrap.append(svg);const hint=document.createElement('div');hint.className='chart-focus-hint';hint.textContent=interactive?'大图模式：双指缩放 · 放大后单指拖动 · 双击放大/复位 · × 退出':'当前只有一个有效时间点：大图可查看，但暂不启用缩放/拖动';wrap.append(hint);return wrap;
+ applyRangeMode(rangeMode,false,savedUi.rangeMode===rangeMode?savedUi.view:null);wrap.append(svg);const hint=document.createElement('div');hint.className='chart-focus-hint';hint.textContent=interactive?'大图模式：双指缩放 · 放大后单指拖动 · 双击放大/复位 · × 退出':'当前只有一个有效时间点：大图可查看，但暂不启用缩放/拖动';wrap.append(hint);if(ACTIVE_FOCUS_RANGE_ID===resolvedRangeId)requestAnimationFrame(()=>{if(wrap.isConnected)openFocus()});return wrap;
 }
 function renderLive(config,live,season){
+ if(ACTIVE_FOCUS_CLOSE)ACTIVE_FOCUS_CLOSE(true);
  const current=Number(live.current_season),snapshot=latestSnapshot(live,season);$('#seasonLabel').textContent=`S${season} ${season===current?'实时追踪':'赛季记录'}`;
  if(season===current){const checked=live.last_checked_at||snapshot?.captured_at,changed=live.last_data_change_at||snapshot?.captured_at,next=nextPlannedCheck();$('#updated').innerHTML=`<div class="update-line"><strong>最后实际检查</strong> ${formatDateTime(checked)}</div><div class="update-line"><strong>最近数据变化</strong> ${formatDateTime(changed)}</div><div class="update-line"><strong>下次计划触发</strong> ${formatDateTime(next.toISOString())}</div>`}else{$('#updated').innerHTML=snapshot?`<div class="update-line"><strong>本季最后记录</strong> ${formatDateTime(snapshot.captured_at)}</div>`:'等待第一次记录'}
  const first=Number(snapshot?.first_place_score),cutoff=Number(snapshot?.cutoff500),spread=Number.isFinite(first)&&Number.isFinite(cutoff)?first-cutoff:null,total=Number(snapshot?.leaderboard_total),strip=$('#leaderboardStrip');strip.replaceChildren();[
@@ -451,10 +459,10 @@ function renderLive(config,live,season){
  const rows=config.players.map((player,sourceIndex)=>{
   const state=snapshot?.players?.[player.id]||{found:false},events=playerEvents(player.id,season,live),known=[...events].reverse().find(e=>Number.isFinite(e.v)),deltas=playerDeltas(player.id,season,live,snapshot),ctx=deltas.ctx||playerCurrentContext(player.id,season,live,snapshot),score=ctx?.exactScore??null,cut=ctx?.cut??(Number.isFinite(Number(known?.cut))?Number(known.cut):null),gap=Number.isFinite(score)&&Number.isFinite(cut)?score-cut:null;
   const lastOfficial=[...snapsForOrder].reverse().map(s=>({snap:s,p:s.players?.[player.id]||{}})).find(x=>x.p.found&&Number.isFinite(Number(x.p.score)));
-  const hasCurrentKnown=!!state.found||!!ctx?.manual;
+  const hasCurrentKnown=!state.ambiguous&&(!!state.found||!!ctx?.manual);
   return{player,state,score,cut,gap,events,known,deltas,ctx,stats:seasonPlayerStats(player.id,season,live),sourceIndex,hasCurrentKnown,lastOfficialScore:lastOfficial?Number(lastOfficial.p.score):null,lastOfficialRank:lastOfficial&&Number.isFinite(Number(lastOfficial.p.rank))?Number(lastOfficial.p.rank):null};
  });
- // 奖牌只代表“当前官方仍在榜”的主播内部名次；未上榜无论是否手动补分都显示砖头。
+ // 奖牌只代表“当前官方仍在榜”的主播内部名次；未上榜无论是否手动补分都显示小丑。
  const placeEligible=rows.filter(row=>row.state.found&&Number.isFinite(row.score));
  const placeMap=new Map([...placeEligible].sort((a,b)=>b.score-a.score||((Number.isFinite(Number(a.state.rank))?Number(a.state.rank):Infinity)-(Number.isFinite(Number(b.state.rank))?Number(b.state.rank):Infinity))||a.sourceIndex-b.sourceIndex).map((row,i)=>[row.player.id,i+1]));
  // 卡片顺序：当前分数已知（官方或手动）按分数高低；当前未知的未上榜主播排在后面，并沿用最近一次在榜时的相对顺序。
@@ -467,17 +475,18 @@ function renderLive(config,live,season){
   return bs-as||a.sourceIndex-b.sourceIndex;
  });
  const grid=$('#statusGrid');grid.replaceChildren();rows.forEach(({player,state,score,cut,gap,known,deltas,ctx,stats})=>{
-  const card=document.createElement('article');card.className='player-card'+(!state.found?' absent':'');card.style.setProperty('--player',player.color);
-  const exact=Number.isFinite(score),gapText=exact&&Number.isFinite(gap)?(gap>=0?`高出进榜线 ${fmt(gap)}分`:`低于进榜线 ${fmt(Math.abs(gap))}分`):(!state.found&&Number.isFinite(cut)?`门槛 ${fmt(cut)}分`:'暂无可用分数');
-  const knownText=!state.found?(ctx?.manual?`手动补录 ${fmt(ctx.manual.score)}分 · ${new Date(ctx.manual.captured_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hour12:false})}`:known?`最近 ${fmt(known.v)}分 · ${new Date(known.t).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}`:'暂无历史分数') : '';
+  const ambiguous=!!state.ambiguous,duplicateCandidates=state.candidates||[],duplicate=duplicateCandidates.length>1,autoDuplicate=duplicate&&state.duplicate_selection!=='owner',candidateText=duplicate?duplicateCandidates.map(x=>`第${x.rank}名 ${fmt(x.score)}分`).join(' / '):'';
+  const card=document.createElement('article');card.className='player-card'+(!state.found?' absent':'')+(ambiguous?' ambiguous':'')+(autoDuplicate?' duplicate-auto':'');card.style.setProperty('--player',player.color);
+  const exact=Number.isFinite(score),gapText=ambiguous?'等待确认同名账号':exact&&Number.isFinite(gap)?(gap>=0?`高出进榜线 ${fmt(gap)}分`:`低于进榜线 ${fmt(Math.abs(gap))}分`):(!state.found&&Number.isFinite(cut)?`门槛 ${fmt(cut)}分`:'暂无可用分数');
+  const knownText=ambiguous?`候选：${candidateText}`:autoDuplicate?`同名${duplicateCandidates.length}人 · 已自动选择（可更正/排除）；候选：${candidateText}`:!state.found?(ctx?.manual?`手动补录 ${fmt(ctx.manual.score)}分 · ${new Date(ctx.manual.captured_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hour12:false})}`:known?`最近 ${fmt(known.v)}分 · ${new Date(known.t).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}`:'暂无历史分数') : '';
   const scoreDeltaHTML=`${deltaChip('较上次',deltas.score.previous,'分',true)}${deltaChip('较今0点',deltas.score.today,'分',true)}`,rankDeltaHTML=`${deltaChip('较上次',deltas.rank.previous,'名',true)}${deltaChip('较今0点',deltas.rank.today,'名',true)}`;
   const streamerPlace=placeMap.get(player.id)||null;
-  const placeIcon=state.found&&streamerPlace?(STREAMER_PLACE_ICONS[Math.min(3,streamerPlace-1)]||''):'🧱';
-  const placeTitle=state.found&&streamerPlace?`当前仍在榜主播中第${streamerPlace}名（每次按当前分数重新计算）`:(ctx?.manual?'当前官方未上榜；手动分数只参与卡片顺序，不改变砖头状态':'当前官方未上榜；按最近一次在榜顺序与其他未上榜主播排序');
+  const placeIcon=ambiguous?'⚠️':state.found&&streamerPlace?(STREAMER_PLACE_ICONS[Math.min(3,streamerPlace-1)]||''):'🤡';
+  const placeTitle=ambiguous?'官方榜出现多个同名账号，需由仓库所有者确认':state.found&&streamerPlace?`当前仍在榜主播中第${streamerPlace}名（每次按当前分数重新计算）`:(ctx?.manual?'当前官方未上榜；手动分数只参与卡片顺序，不改变小丑状态':'当前官方未上榜；按最近一次在榜顺序与其他未上榜主播排序');
   const placeBadge=`<span class="streamer-place" title="${placeTitle}">${placeIcon}</span>`;
   const highScoreText=Number.isFinite(stats.highScore)?`${fmt(stats.highScore)}分`:'—',bestRankText=Number.isFinite(stats.bestRank)?`第${fmt(stats.bestRank)}名`:'—';
   const statsHTML=`<div class="season-stats" title="最高分含本季官方记录与手动补录；最佳名次和上榜累计仅按官方抓取记录计算"><div class="season-stat score"><span>本季最高分</span><b>${highScoreText}</b><small>${monthDay(stats.highScoreAt)}</small></div><div class="season-stat rank"><span>本季最佳名次</span><b>${bestRankText}</b><small>${monthDay(stats.bestRankAt)}</small></div><div class="season-stat hours"><span>上榜累计</span><b>${compactHours(stats.onboardMs)}</b><small>&nbsp;</small></div></div>`;
-  card.innerHTML=`<div class="player-title-row"><div class="player-name"><span class="shape-key" style="color:${player.color}">${SHAPE_TEXT[SHAPES[player.id]]}</span> ${displayPlayerName(player)}</div></div><div class="score-line"><div class="score-main">${placeBadge}<div class="score">${exact?fmt(score):'—'}</div></div><div class="score-deltas">${scoreDeltaHTML}</div></div>${knownText?`<div class="score-note">${knownText}</div>`:''}<div class="rank-line"><span class="state ${state.found?'on':'off'}">${state.found?`第 ${state.rank} 名`:'未上榜'}</span><div class="rank-deltas">${rankDeltaHTML}</div></div>${statsHTML}<div class="meta-row"><span class="gap ${Number.isFinite(gap)&&gap>=0?'up':'down'}">${gapText}</span></div>`;grid.append(card)
+  card.innerHTML=`<div class="player-title-row"><div class="player-name"><span class="shape-key" style="color:${player.color}">${SHAPE_TEXT[SHAPES[player.id]]}</span> ${displayPlayerName(player)}</div></div><div class="score-line"><div class="score-main">${placeBadge}<div class="score">${exact?fmt(score):'—'}</div></div><div class="score-deltas">${scoreDeltaHTML}</div></div>${knownText?`<div class="score-note" title="${knownText}">${knownText}</div>`:''}<div class="rank-line"><span class="state ${ambiguous?'ambiguous':state.found?'on':'off'}">${ambiguous?'同名待确认':state.found?`第 ${state.rank} 名`:'未上榜'}</span><div class="rank-deltas">${rankDeltaHTML}</div></div>${statsHTML}<div class="meta-row"><span class="gap ${Number.isFinite(gap)&&gap>=0?'up':'down'}">${gapText}</span></div>`;grid.append(card)
  });
  const personal=$('#personalCharts');personal.replaceChildren(),cutoffPoints=collapseFlat((live.snapshots||[]).filter(s=>Number(s.season)===season&&Number.isFinite(s.cutoff500)).map(s=>({t:time(s.captured_at),v:Number(s.cutoff500)})));
  config.players.forEach(player=>{const events=playerEvents(player.id,season,live);personal.append(lineChart([{id:player.id,name:player.name,color:player.color,shape:SHAPES[player.id],points:events}],{title:displayPlayerName(player),subtitle:'',cutoffs:cutoffPoints,bands:absenceBands(player.id,season,live),labelMode:'keys',rangeId:`personal:${player.id}:score`,compressIdle:true}))});
@@ -487,21 +496,21 @@ function renderLive(config,live,season){
 function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return(h>>>0)/4294967295}
 function historySeries(s){const anchors=[[time(s.start+'T00:00:00Z'),s.startV],...(s.guides||[]).map(p=>[time(p[0]+'T00:00:00Z'),p[1]]),...s.points.map(p=>[time(p[0]+'T00:00:00Z'),p[1]]),[time(s.end+'T00:00:00Z'),s.endV]].sort((a,b)=>a[0]-b[0]).filter((p,i,a)=>!i||p[0]!==a[i-1][0]),out=[];for(let i=0;i<anchors.length-1;i++){const[a,av]=anchors[i],[b,bv]=anchors[i+1],days=Math.max(1,Math.round((b-a)/DAY)),seed=hash(s.id+i),cycles=days>16?2:days>7?1.35:.65;for(let d=0;d<=days;d++){if(i&&d===0)continue;const t=d/days,e=t*t*(3-2*t),base=av+(bv-av)*e,envelope=Math.sin(Math.PI*t),wave=Math.sin(2*Math.PI*cycles*t+seed*4-2)*.72+Math.sin(4*Math.PI*cycles*t+seed*7)*.28;out.push({t:a+d*DAY,v:Math.max(s.floor,Math.min(s.ceil,base+envelope*wave*s.vol))})}}return out}
 function renderHistory(){const grid=$('#historyGrid');HISTORY.forEach(s=>{const card=document.createElement('article');card.className='season';card.innerHTML=`<div class="season-head"><div><h3>${s.id}</h3><div class="range">${s.start} — ${s.end}</div></div><span class="badge ${s.final==='in'?'up':'down'}">${s.final==='in'?`封榜上榜 · 第${s.rank}名`:'封榜未上榜'}</span></div>`;const W=520,H=300,L=47,R=15,T=26,B=43,x0=time(s.start+'T00:00:00Z'),x1=time(s.end+'T00:00:00Z'),x=t=>L+(t-x0)/(x1-x0)*(W-L-R),y=v=>T+(8600-v)/(8600-2800)*(H-T-B),svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`});for(const v of [3000,4000,5000,6000,7000,8000]){svg.append(svgEl('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),stroke:'#e2e6ef'}));svg.append(svgEl('text',{x:L-7,y:y(v)+4,'text-anchor':'end',class:'axis'},v))}svg.append(svgEl('line',{x1:L,x2:W-R,y1:y(s.cut),y2:y(s.cut),stroke:'#ed684f','stroke-width':2,'stroke-dasharray':'7 6'}));svg.append(svgEl('text',{x:W-R-2,y:y(s.cut)-6,'text-anchor':'start',class:'cut-label'},`封榜线 ${fmt(s.cut)}`));const curve=historySeries(s);svg.append(svgEl('path',{d:pathFrom(curve,x,y),fill:'none',stroke:'#3568e8','stroke-width':3.2,'stroke-linecap':'round','stroke-linejoin':'round'}));[['赛季初期',x0],['赛季中段',(x0+x1)/2],['赛季结束',x1]].forEach(([label,t],i)=>svg.append(svgEl('text',{x:x(t),y:H-9,'text-anchor':i===0?'start':i===2?'end':'middle',class:'axis'},label)));s.points.forEach(p=>{const px=x(time(p[0]+'T00:00:00Z')),py=y(p[1]),approx=p[2]==='approx',col=p[1]>=s.cut?'#13845b':'#cf4a4a';if(approx){svg.append(svgEl('polygon',{points:`${px},${py-7} ${px+7},${py} ${px},${py+7} ${px-7},${py}`,fill:'#e5a625',stroke:'#fff','stroke-width':2}));svg.append(svgEl('text',{x:px+9,y:py-10,class:'value',fill:'#9a6800'},'≈8,200+'))}else{svg.append(svgEl('circle',{cx:px,cy:py,r:5.5,fill:col,stroke:'#fff','stroke-width':2.5}));svg.append(svgEl('text',{x:px,y:py-10,'text-anchor':'middle',class:'value'},fmt(p[1])))}});card.append(svg);const trend=document.createElement('div');trend.className='trend';trend.innerHTML=`<b>趋势：</b>${s.trend}`;card.append(trend);grid.append(card)})}
-const APP={config:null,live:null,season:null,lastCurrent:null};
+const APP={config:null,live:null,season:null,lastCurrent:null,dataSignature:null};
 function availableSeasons(live){return [...new Set([Number(live.current_season),...(live.snapshots||[]).map(s=>Number(s.season)),...(live.manual_records||[]).map(r=>Number(r.season))].filter(Number.isFinite))].sort((a,b)=>a-b)}
 function csvCell(value){const text=value==null?'':String(value);return/[",\n]/.test(text)?`"${text.replaceAll('"','""')}"`:text}
 function downloadBlob(name,blob){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function exportSeasonCSV(config,live,season){
  const names=Object.fromEntries(config.players.map(p=>[p.id,p.name])),rows=[];
- (live.snapshots||[]).filter(s=>Number(s.season)===season).forEach(s=>config.players.forEach(p=>{const state=s.players?.[p.id]||{},score=state.found?state.score:null,cut=s.cutoff500;rows.push([s.captured_at,`S${season}`,p.id,p.name,'官方榜单',state.found?'上榜':'未上榜',score,state.rank,cut,Number.isFinite(score)&&Number.isFinite(cut)?score-cut:'',s.first_place_score??'',s.first_place_name??'',s.leaderboard_total??''])}));
- (live.manual_records||[]).filter(r=>Number(r.season)===season).forEach(r=>rows.push([r.captured_at,`S${season}`,r.player_id,names[r.player_id]||r.player_id,'手动补录','未上榜',r.score,'',r.cutoff500,Number.isFinite(r.score)&&Number.isFinite(r.cutoff500)?r.score-r.cutoff500:'','','','']));
- rows.sort((a,b)=>time(a[0])-time(b[0])||String(a[3]).localeCompare(String(b[3])));const data=[['记录时间','赛季','主播ID','主播','来源','榜单状态','分数','排名','前500进榜线','高出进榜线','第一名分数','第一名ID','榜单人数'],...rows].map(row=>row.map(csvCell).join(',')).join('\n'),last=latestSnapshot(live,season)?.captured_at?.slice(0,10)||new Date().toISOString().slice(0,10);downloadBlob(`地下竞技场-S${season}-截至${last}.csv`,new Blob(['\ufeff'+data],{type:'text/csv;charset=utf-8'}));
+ (live.snapshots||[]).filter(s=>Number(s.season)===season).forEach(s=>config.players.forEach(p=>{const state=s.players?.[p.id]||{},score=state.found?state.score:null,cut=s.cutoff500,candidates=(state.candidates||[]).map(x=>`第${x.rank}名/${x.score}分`).join('；'),duplicate=candidates&&state.duplicate_selection;rows.push([s.captured_at,`S${season}`,p.id,p.name,'官方榜单',state.ambiguous?'同名待确认':duplicate==='auto'?'上榜（同名自动选择）':duplicate==='owner'?'上榜（同名已更正）':state.found?'上榜':'未上榜',candidates,score,state.rank,cut,Number.isFinite(score)&&Number.isFinite(cut)?score-cut:'',s.first_place_score??'',s.first_place_name??'',s.leaderboard_total??''])}));
+ (live.manual_records||[]).filter(r=>Number(r.season)===season).forEach(r=>rows.push([r.captured_at,`S${season}`,r.player_id,names[r.player_id]||r.player_id,'手动补录','未上榜','',r.score,'',r.cutoff500,Number.isFinite(r.score)&&Number.isFinite(r.cutoff500)?r.score-r.cutoff500:'','','','']));
+ rows.sort((a,b)=>time(a[0])-time(b[0])||String(a[3]).localeCompare(String(b[3])));const data=[['记录时间','赛季','主播ID','主播','来源','榜单状态','同名候选','分数','排名','前500进榜线','高出进榜线','第一名分数','第一名ID','榜单人数'],...rows].map(row=>row.map(csvCell).join(',')).join('\n'),last=latestSnapshot(live,season)?.captured_at?.slice(0,10)||new Date().toISOString().slice(0,10);downloadBlob(`地下竞技场-S${season}-截至${last}.csv`,new Blob(['\ufeff'+data],{type:'text/csv;charset=utf-8'}));
 }
 function exportFullBackup(config,live){const payload={format:'doge-arena-backup-v1',exported_at:new Date().toISOString(),players:config,live},stamp=new Date().toISOString().replace(/[:.]/g,'-');downloadBlob(`地下竞技场-完整备份-${stamp}.json`,new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'}))}
 function renderApp(){
  const {config,live,season}=APP,select=$('#seasonSelect'),seasons=availableSeasons(live);syncGlobalRangeButton();const globalRangeBtn=$('#globalRangeToggle');if(globalRangeBtn)globalRangeBtn.onclick=()=>{GLOBAL_CHART_RANGE=GLOBAL_CHART_RANGE==='local'?'full':'local';CHART_RANGE_OVERRIDES.clear();renderApp()};select.replaceChildren(...seasons.map(n=>{const option=document.createElement('option');option.value=n;option.textContent=`S${n}${n===Number(live.current_season)?'（当前）':''}`;return option}));select.value=String(season);select.onchange=()=>{APP.season=Number(select.value);renderApp()};$('#exportCsv').onclick=()=>exportSeasonCSV(config,live,APP.season);$('#exportBackup').onclick=()=>exportFullBackup(config,live);renderLive(config,live,season);
 }
-function applyData(config,live){const current=Number(live.current_season);if(APP.season===null||APP.lastCurrent===null||current>APP.lastCurrent)APP.season=current;APP.config=config;APP.live=live;APP.lastCurrent=current;renderApp()}
+function applyData(config,live){const current=Number(live.current_season),signature=JSON.stringify([config,live]),changed=signature!==APP.dataSignature;if(APP.season===null||APP.lastCurrent===null||current>APP.lastCurrent)APP.season=current;APP.config=config;APP.live=live;APP.lastCurrent=current;if(!changed)return;APP.dataSignature=signature;renderApp()}
 async function load(){try{const[config,live]=await Promise.all([getJSON('players.json'),getJSON('live.json')]);$('#loadError').classList.add('hidden');applyData(config,live)}catch(error){if(location.protocol==='file:'){applyData(DEFAULT_CONFIG,DEFAULT_LIVE);$('#loadError').classList.add('hidden');return}$('#loadError').textContent='实时数据暂时无法读取：'+error.message;$('#loadError').classList.remove('hidden')}}
 renderHistory();load();setInterval(load,60000);setInterval(()=>{if(!APP.live||APP.season!==Number(APP.live.current_season))return;const snapshot=latestSnapshot(APP.live,APP.season),checked=APP.live.last_checked_at||snapshot?.captured_at,changed=APP.live.last_data_change_at||snapshot?.captured_at,next=nextPlannedCheck();$('#updated').innerHTML=`<div class="update-line"><strong>最后实际检查</strong> ${formatDateTime(checked)}</div><div class="update-line"><strong>最近数据变化</strong> ${formatDateTime(changed)}</div><div class="update-line"><strong>下次计划触发</strong> ${formatDateTime(next.toISOString())}</div>`},30000);
 </script>

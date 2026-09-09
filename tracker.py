@@ -89,26 +89,95 @@ def fetch_leaderboard(season):
     return rows, total, cutoff, first_score, first_name
 
 
-def make_snapshot(season, players, rows, total, cutoff, first_score, first_name, captured_at):
+def expire_duplicate_exclusions(live, players, rows, season, captured_at):
+    aliases = {player["id"]: set(player.get("aliases", [])) for player in players}
+    for rule in live.get("duplicate_exclusions", []):
+        if int(rule.get("season", 0)) != season or rule.get("until") or str(rule.get("from", "")) >= captured_at:
+            continue
+        player_aliases = aliases.get(rule.get("player_id"), set())
+        still_present = any(
+            str(row.get("battle_tag", "")).strip() in player_aliases
+            and int(row.get("score")) == int(rule.get("score"))
+            for row in rows
+        )
+        if not still_present:
+            rule["until"] = captured_at
+
+
+def make_snapshot(season, players, rows, total, cutoff, first_score, first_name, captured_at, previous=None, exclusions=None):
     alias_map = {}
     for player in players:
         for alias in player.get("aliases", []):
-            alias_map[alias.strip()] = player["id"]
-    matched = {}
+            alias_map.setdefault(alias.strip(), []).append(player["id"])
+    matched = {player["id"]: [] for player in players}
     for row in rows:
         tag = str(row.get("battle_tag", "")).strip()
-        player_id = alias_map.get(tag)
-        if player_id and player_id not in matched:
-            matched[player_id] = row
+        for player_id in alias_map.get(tag, []):
+            matched[player_id].append(row)
     states = {}
     for player in players:
-        row = matched.get(player["id"])
-        states[player["id"]] = {
-            "found": row is not None,
-            "rank": row.get("position") if row else None,
-            "score": row.get("score") if row else None,
-            "matched_alias": row.get("battle_tag") if row else None,
-        }
+        candidates = matched.get(player["id"], [])
+        if len(candidates) == 1:
+            row = candidates[0]
+            states[player["id"]] = {
+                "found": True,
+                "rank": row.get("position"),
+                "score": row.get("score"),
+                "matched_alias": row.get("battle_tag"),
+            }
+        elif len(candidates) > 1:
+            ordered = sorted(candidates, key=lambda item: int(item.get("position") or 999999))
+            active_exclusions = [
+                rule for rule in (exclusions or [])
+                if int(rule.get("season", 0)) == season
+                and rule.get("player_id") == player["id"]
+                and str(rule.get("from", "")) <= captured_at
+                and (not rule.get("until") or captured_at < str(rule.get("until")))
+            ]
+            eligible = [
+                row for row in ordered
+                if not any(int(rule.get("score")) == int(row.get("score")) for rule in active_exclusions)
+            ]
+            if not eligible:
+                eligible = ordered
+            previous_state = (previous or {}).get("players", {}).get(player["id"], {})
+            previous_score = previous_state.get("score") if previous_state.get("found") else None
+            if isinstance(previous_score, (int, float)):
+                chosen = min(
+                    eligible,
+                    key=lambda item: (
+                        abs(int(item.get("score") or 0) - int(previous_score)),
+                        int(item.get("position") or 999999),
+                    ),
+                )
+                selection_reason = "closest_previous_score"
+            else:
+                chosen = eligible[0]
+                selection_reason = "highest_rank"
+            states[player["id"]] = {
+                "found": True,
+                "rank": chosen.get("position"),
+                "score": chosen.get("score"),
+                "matched_alias": chosen.get("battle_tag"),
+                "duplicate_selection": "auto",
+                "duplicate_selection_reason": selection_reason,
+                "duplicate_exclusions_applied": len(ordered) - len(eligible),
+                "candidates": [
+                    {
+                        "rank": row.get("position"),
+                        "score": row.get("score"),
+                        "matched_alias": row.get("battle_tag"),
+                    }
+                    for row in ordered
+                ],
+            }
+        else:
+            states[player["id"]] = {
+                "found": False,
+                "rank": None,
+                "score": None,
+                "matched_alias": None,
+            }
     return {
         "captured_at": captured_at,
         "season": season,
@@ -136,7 +205,23 @@ def main():
     checked_at = datetime.now(TZ).isoformat(timespec="seconds")
     season = detect_season(live)
     rows, total, cutoff, first_score, first_name = fetch_leaderboard(season)
-    snapshot = make_snapshot(season, config["players"], rows, total, cutoff, first_score, first_name, checked_at)
+    expire_duplicate_exclusions(live, config["players"], rows, season, checked_at)
+    previous = next(
+        (item for item in reversed(live.get("snapshots", [])) if int(item.get("season", 0)) == season),
+        None,
+    )
+    snapshot = make_snapshot(
+        season,
+        config["players"],
+        rows,
+        total,
+        cutoff,
+        first_score,
+        first_name,
+        checked_at,
+        previous,
+        live.get("duplicate_exclusions", []),
+    )
 
     live["current_season"] = season
     live["last_checked_at"] = checked_at
