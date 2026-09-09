@@ -6960,9 +6960,6 @@
           "rank": 170,
           "score": 5602,
           "matched_alias": "一本正经的稻哥",
-          "duplicate_selection": "auto",
-          "duplicate_selection_reason": "closest_previous_score",
-          "duplicate_exclusions_applied": 0,
           "candidates": [
             {
               "rank": 170,
@@ -6974,7 +6971,11 @@
               "score": 5234,
               "matched_alias": "一本正经的稻哥"
             }
-          ]
+          ],
+          "duplicate_selection": "owner",
+          "resolved_duplicate": true,
+          "resolved_by": "owner",
+          "resolved_at": "2026-09-10T01:01:21+08:00"
         },
         "zangmu": {
           "found": true,
