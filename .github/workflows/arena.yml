@@ -14,6 +14,8 @@ on:
         options:
           - 立即读取官方榜单
           - 手动补录未上榜分数
+          - 更正同名账号
+          - 排除同名候选
           - 登记主播新ID
           - 合并恢复完整JSON备份
           - 合并导入历史CSV
@@ -27,7 +29,11 @@ on:
           - 我爱李大燕丶
           - 人五人六
       score:
-        description: "手动补录分数"
+        description: "补录时填分数；更正时填正确分数；排除时填错误候选分数"
+        required: false
+        type: string
+      rank:
+        description: "更正或排除同名时填写对应名次（候选同分时必填）"
         required: false
         type: string
       recorded_at:
@@ -97,6 +103,26 @@ jobs:
           PLAYER: ${{ inputs.player }}
           NEW_ALIAS: ${{ inputs.new_alias }}
         run: python admin.py alias --player "$PLAYER" --alias "$NEW_ALIAS"
+
+      - name: Resolve duplicate player name
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == '更正同名账号'
+        env:
+          PLAYER: ${{ inputs.player }}
+          SCORE: ${{ inputs.score }}
+          RANK: ${{ inputs.rank }}
+          RECORDED_AT: ${{ inputs.recorded_at }}
+          SEASON: ${{ inputs.season }}
+        run: python admin.py resolve-duplicate --player "$PLAYER" --score "$SCORE" --rank "$RANK" --time "$RECORDED_AT" --season "$SEASON"
+
+      - name: Exclude duplicate player candidate
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == '排除同名候选'
+        env:
+          PLAYER: ${{ inputs.player }}
+          SCORE: ${{ inputs.score }}
+          RANK: ${{ inputs.rank }}
+          RECORDED_AT: ${{ inputs.recorded_at }}
+          SEASON: ${{ inputs.season }}
+        run: python admin.py exclude-duplicate --player "$PLAYER" --score "$SCORE" --rank "$RANK" --time "$RECORDED_AT" --season "$SEASON"
 
       - name: Restore JSON backup by merge
         if: github.event_name == 'workflow_dispatch' && inputs.operation == '合并恢复完整JSON备份'
