@@ -9201,13 +9201,62 @@
           "matched_alias": "人五人六"
         }
       }
+    },
+    {
+      "captured_at": "2026-09-10T23:39:33+08:00",
+      "season": 9,
+      "first_place_score": 8135,
+      "first_place_name": "髁恩恩",
+      "cutoff500": 4932,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": true,
+          "rank": 174,
+          "score": 5602,
+          "matched_alias": "一本正经的稻哥",
+          "duplicate_selection": "auto",
+          "duplicate_selection_reason": "closest_previous_score",
+          "duplicate_exclusions_applied": 0,
+          "candidates": [
+            {
+              "rank": 174,
+              "score": 5602,
+              "matched_alias": "一本正经的稻哥"
+            },
+            {
+              "rank": 322,
+              "score": 5234,
+              "matched_alias": "一本正经的稻哥"
+            }
+          ]
+        },
+        "zangmu": {
+          "found": true,
+          "rank": 4,
+          "score": 7541,
+          "matched_alias": "最后一只脏牧"
+        },
+        "dayan": {
+          "found": true,
+          "rank": 3,
+          "score": 7668,
+          "matched_alias": "我爱李大燕丶"
+        },
+        "renwurenliu": {
+          "found": true,
+          "rank": 11,
+          "score": 6905,
+          "matched_alias": "人五人六"
+        }
+      }
     }
   ],
   "manual_records": [],
-  "last_checked_at": "2026-09-10T23:07:10+08:00",
+  "last_checked_at": "2026-09-10T23:39:33+08:00",
   "schedule_minutes": [
     0,
     30
   ],
-  "last_data_change_at": "2026-09-10T22:40:32+08:00"
+  "last_data_change_at": "2026-09-10T23:39:33+08:00"
 }
