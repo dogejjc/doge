@@ -48092,13 +48092,47 @@
           "matched_alias": "人五人六"
         }
       }
+    },
+    {
+      "captured_at": "2026-10-04T04:33:58+08:00",
+      "season": 9,
+      "first_place_score": 8773,
+      "first_place_name": "斗鱼一坨麻瓜",
+      "cutoff500": 5654,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "zangmu": {
+          "found": true,
+          "rank": 44,
+          "score": 6954,
+          "matched_alias": "最后一只脏牧"
+        },
+        "dayan": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "renwurenliu": {
+          "found": true,
+          "rank": 51,
+          "score": 6856,
+          "matched_alias": "人五人六"
+        }
+      }
     }
   ],
   "manual_records": [],
-  "last_checked_at": "2026-10-04T00:37:28+08:00",
+  "last_checked_at": "2026-10-04T04:33:58+08:00",
   "schedule_minutes": [
     0,
     30
   ],
-  "last_data_change_at": "2026-10-04T00:37:28+08:00"
+  "last_data_change_at": "2026-10-04T04:33:58+08:00"
 }
