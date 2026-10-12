@@ -94,12 +94,13 @@ def add_score(args, actor):
         raise ValueError("Score is outside the accepted range")
     cutoff = None
     season = parse_season(args.season, live.get("current_season", 9))
-    for snapshot in reversed(live.get("snapshots", [])):
-        if int(snapshot.get("season", 0)) == season:
+    recorded_at = parse_time(args.time)
+    for snapshot in sorted(live.get("snapshots", []), key=lambda x: x.get("captured_at", ""), reverse=True):
+        if int(snapshot.get("season", 0)) == season and datetime.fromisoformat(snapshot["captured_at"]) <= datetime.fromisoformat(recorded_at):
             cutoff = snapshot.get("cutoff500")
             break
     record = {
-        "captured_at": parse_time(args.time),
+        "captured_at": recorded_at,
         "season": season,
         "player_id": player["id"],
         "score": score,
@@ -369,6 +370,65 @@ def apply_duplicate_issue(args, actor):
         exclude_duplicate(forwarded, actor)
 
 
+def apply_website_issue(args, actor):
+    """Owner-only website requests. Public visitors can prepare, never authorize writes."""
+    ensure_owner()
+    body = str(args.body or "").strip()
+    if body.startswith("DOGE_DUPLICATE_ACTION_V1\n"):
+        return apply_duplicate_issue(args, actor)
+    marker, separator, encoded = body.partition("\n")
+    if marker != "DOGE_OWNER_ACTION_V2" or not separator:
+        raise ValueError("Invalid website request")
+    payload = json.loads(encoded)
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid request payload")
+    action = payload.get("action")
+    if action == "manual_score":
+        # Reuse score validation, internal player lookup, append-only and duplicate checks.
+        forwarded = argparse.Namespace(player=str(payload.get("player_id", "")),
+            season=str(payload.get("season", "")), score=str(payload.get("score", "")),
+            time=str(payload.get("captured_at", "")), note=str(payload.get("note", "")))
+        if not forwarded.time:
+            raise ValueError("Website requests require an explicit score timestamp")
+        return add_score(forwarded, actor)
+    if action not in ("acknowledge_group", "acknowledge_all"):
+        raise ValueError("Unknown website action")
+    ensure_data_files()
+    config, live = read_json(PLAYERS_FILE), read_json(LIVE_FILE)
+    season = parse_season(payload.get("season"), live.get("current_season", 9))
+    end = parse_time(payload.get("end_time")) if payload.get("end_time") else None
+    if not end:
+        raise ValueError("Review requests require a cutoff timestamp")
+    player_id, start = None, None
+    if action == "acknowledge_group":
+        player_id = find_player(config, str(payload.get("player_id", "")))["id"]
+        if not payload.get("start_time"):
+            raise ValueError("Missing group start")
+        start = parse_time(payload["start_time"])
+        if datetime.fromisoformat(start) > datetime.fromisoformat(end):
+            raise ValueError("Invalid group range")
+    season_snaps = [x for x in live.get("snapshots", []) if int(x.get("season", 0)) == season]
+    if not any(datetime.fromisoformat(x["captured_at"]) == datetime.fromisoformat(end) for x in season_snaps):
+        raise ValueError("Review cutoff is not a saved snapshot")
+    now, count = datetime.now(TZ).isoformat(timespec="seconds"), 0
+    for snapshot in season_snaps:
+        at = datetime.fromisoformat(snapshot["captured_at"])
+        if at > datetime.fromisoformat(end) or (start and at < datetime.fromisoformat(start)):
+            continue
+        for pid, state in snapshot.get("players", {}).items():
+            if player_id and pid != player_id:
+                continue
+            if len(state.get("candidates", [])) <= 1 or state.get("duplicate_selection") == "owner" or state.get("duplicate_reviewed"):
+                continue
+            # Review only: no deletion, candidate rewriting or identity assertions.
+            state.update(duplicate_reviewed=True, duplicate_reviewed_at=now, duplicate_reviewed_by=actor)
+            count += 1
+    if not count:
+        raise ValueError("No unreviewed duplicate records in this range")
+    write_json(LIVE_FILE, live)
+    print(f"Reviewed {count} duplicate records; original scores and candidates preserved")
+
+
 def merge_missing(existing, incoming):
     if not isinstance(existing, dict) or not isinstance(incoming, dict):
         return existing
@@ -546,6 +606,9 @@ def main():
     issue = sub.add_parser("duplicate-issue")
     issue.add_argument("--body", required=True)
 
+    website = sub.add_parser("website-issue")
+    website.add_argument("--body", required=True)
+
     restore = sub.add_parser("restore-json")
     restore.add_argument("--file", required=True)
     csv_import = sub.add_parser("import-csv")
@@ -567,6 +630,8 @@ def main():
         exclude_duplicate(args, actor)
     elif args.operation == "duplicate-issue":
         apply_duplicate_issue(args, actor)
+    elif args.operation == "website-issue":
+        apply_website_issue(args, actor)
     elif args.operation == "restore-json":
         restore_json(args)
     elif args.operation == "import-csv":

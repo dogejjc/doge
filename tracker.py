@@ -17,7 +17,7 @@ PLAYERS_EXAMPLE_FILE = Path("players.example.json")
 LIVE_FILE = Path("live.json")
 LIVE_EXAMPLE_FILE = Path("live.example.json")
 TZ = ZoneInfo("Asia/Shanghai")
-SCHEDULE_MINUTES = [0, 30]
+SCHEDULE_MINUTES = [7, 27, 47]
 
 
 def read_json(path, default):
