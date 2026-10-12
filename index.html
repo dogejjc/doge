@@ -146,7 +146,7 @@ function lineSegments(points){
  [...points].sort((a,b)=>a.t-b.t).forEach(p=>{if(!Number.isFinite(p.v)){flush();return}if(p.source==='manual'){flush();return}segment.push(p)});flush();return out;
 }
 function tooltipText(s,p,mode){
- const when=new Date(p.t).toLocaleString('zh-CN',{hour12:false,timeZone:'Asia/Shanghai'}),value=mode==='rank'?`第${fmt(p.v)}名`:mode==='gap'?`${p.v>=0?'+':''}${fmt(p.v)}分`:`${fmt(p.v)}分`,rank=mode==='score'&&Number.isFinite(Number(p.rank))?` · 第${fmt(p.rank)}名`:'';
+ const when=new Date(p.t).toLocaleString('zh-CN',{hour12:false,timeZone:'Asia/Shanghai'}),value=mode==='rank'?`第${fmt(p.v)}名`:mode==='gap'?`${p.v>=0?'+':''}${fmt(p.v)}分`:`${fmt(p.v)}分`,rank=mode==='score'&&p.rank!=null&&Number.isFinite(Number(p.rank))?` · 第${fmt(p.rank)}名`:'';
  return `${s.name} · ${value}${rank} · ${when}${p.source==='manual'?' · 手动补录':''}`;
 }
 function absenceBands(playerId,season,live){
@@ -267,14 +267,19 @@ function marker(shape,px,py,color,manual,title){
 function cutoffRailText(points){
  const finite=points.filter(p=>Number.isFinite(p.v));if(!finite.length)return '';const p=finite[finite.length-1],prev=[...finite.slice(0,-1)].reverse().find(q=>q.v!==p.v);let extra='';if(prev){const d=p.v-prev.v;extra=d>0?` · ↑+${fmt(d)}`:d<0?` · ↓${fmt(Math.abs(d))}`:' · —0'}return `门槛 ${fmt(p.v)}${extra}`;
 }
-function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtitle='',labelMode='auto',rangeId='',compressIdle=false }={}){
+function absenceRuns(points){
+ const checks=points.filter(p=>p.source==='official').sort((a,b)=>a.t-b.t),runs=[];let active=null,previous=null;
+ checks.forEach(p=>{if(p.found===false){if(!active)active={start:p.t,end:p.t,before:previous&&Number.isFinite(previous.v)?previous:null,after:null};active.end=p.t}else if(active){active.end=p.t;active.after=Number.isFinite(p.v)?p:null;runs.push(active);active=null}previous=p});if(active)runs.push(active);return runs;
+}
+function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtitle='',labelMode='auto',rangeId='',compressIdle=false,showAbsence=false }={}){
  const rawSeries=inputSeries.map(s=>({...s,shape:s.shape||SHAPES[s.id]||'circle'})),effectiveLabelMode=labelMode==='auto'?(rawSeries.length===1&&mode==='score'?'keys':'latest'):labelMode;
  const idleWarp=compressIdle&&mode==='score'&&rawSeries.length===1?idleTimeWarp(rawSeries[0].points):{gaps:[],map:t=>t,unmap:t=>t};
  const series=rawSeries.map(s=>({...s,points:collapseFlat(s.points)})),cleanCuts=collapseFlat(cutoffs),wrap=document.createElement('article');wrap.className='chart-card';
  const sub=subtitle?`<div class="chart-sub">${subtitle}</div>`:'';
  wrap.innerHTML=`<div class="chart-head"><div><div class="chart-title-wrap"><h3>${title}</h3><button class="chart-range-btn" data-action="range" type="button" title="切换这张图的显示范围">48h</button></div>${sub}</div><div class="chart-actions"><button data-action="out" title="缩小时间范围">−</button><button data-action="in" title="放大时间范围">＋</button><button data-action="points" title="显示或隐藏采样点">•</button><button data-action="labels" title="显示或隐藏图内数值标注">字</button>${compressIdle?'<button data-action="compress" title="压缩或还原连续至少6小时不变的时间段">≈</button>':''}<button data-action="reset" title="恢复当前范围">↺</button><button data-action="focus" title="大图查看（手机推荐）">⛶</button></div></div>`;
- const finite=series.flatMap(s=>s.points.filter(p=>Number.isFinite(p.v)));if(!finite.length&&!bands.length){const e=document.createElement('div');e.className='empty';e.textContent=mode==='rank'?'本季暂无上榜排名':'本季暂无分数记录';wrap.append(e);return wrap}
- const W=840,H=305,L=54,T=30,B=40,hasCutoff=mode==='score'&&cleanCuts.some(p=>Number.isFinite(p.v)),needsRail=effectiveLabelMode==='latest'||hasCutoff,R=needsRail?158:30,plotW=W-L-R,railJoinX=W-R+7,railTextX=W-R+15;
+ const absentSeries=showAbsence?rawSeries.map(s=>({...s,runs:absenceRuns(s.points)})).filter(s=>s.runs.length):[],absenceLaneHeight=absentSeries.length?18+absentSeries.length*12:0;
+ const finite=series.flatMap(s=>s.points.filter(p=>Number.isFinite(p.v)));if(!finite.length&&!bands.length&&!absentSeries.length){const e=document.createElement('div');e.className='empty';e.textContent=mode==='rank'?'本季暂无上榜排名':'本季暂无分数记录';wrap.append(e);return wrap}
+ const W=840,H=305+absenceLaneHeight,L=54,T=30,B=40+absenceLaneHeight,hasCutoff=mode==='score'&&cleanCuts.some(p=>Number.isFinite(p.v)),needsRail=effectiveLabelMode==='latest'||hasCutoff,R=needsRail?158:30,plotW=W-L-R,railJoinX=W-R+7,railTextX=W-R+15;
  const primaryTimes=series.flatMap(s=>s.points.map(p=>p.t)).concat(bands.flatMap(b=>[b.start,b.end])).filter(Number.isFinite),allTimes=(primaryTimes.length?primaryTimes:cleanCuts.map(p=>p.t)).filter(Number.isFinite).sort((a,b)=>a-b);
  const raw0=allTimes[0],raw1=allTimes[allTimes.length-1],rawSpan=Math.max(0,raw1-raw0),singleMoment=rawSpan<60000;
  const edgePad=singleMoment?45*60000:(compressIdle&&idleWarp.gaps.length?12*60000:Math.max(10*60000,Math.min(90*60000,rawSpan*.025)));
@@ -283,7 +288,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  const interactive=distinctTimes.length>=2&&rawSpan>=5*60000;
  const baseMinSpan=Math.min(fullSpan,Math.max(10*60000,Math.min(60*60000,rawSpan*.16||10*60000)));
  const resolvedRangeId=rangeId||`${mode}:${title}`,savedUi=CHART_UI_STATE.get(resolvedRangeId)||{},view={x0:full0,x1:full1},svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,'aria-label':title}),clipId=`plot-${++chartSeq}`;
- let rangeMode=chartRangeMode(resolvedRangeId),scope0=full0,scope1=full1,scopeSpan=fullSpan,showPoints=savedUi.showPoints??true,showLabels=savedUi.showLabels??true,compressTime=(savedUi.compressTime??true)&&compressIdle&&idleWarp.gaps.length>0,inspectActive=false,inspectTime=null,skipInspectClick=false,inspectFrame=0,pendingInspectX=null,drag=null,panFrame=0,pendingClientX=null,inertiaFrame=0;
+ let rangeMode=chartRangeMode(resolvedRangeId),scope0=full0,scope1=full1,scopeSpan=fullSpan,showPoints=savedUi.showPoints??true,showLabels=savedUi.showLabels??true,compressPreference=savedUi.compressPreference??savedUi.compressTime??true,compressTime=compressPreference&&compressIdle&&idleWarp.gaps.length>0,inspectActive=false,inspectTime=null,skipInspectClick=false,inspectFrame=0,pendingInspectX=null,drag=null,panFrame=0,pendingClientX=null,inertiaFrame=0;
  const pointers=new Map();
  let pinch=null,lastTap={time:0,x:0,y:0},lastTouchEnd=0,touchMoved=false,velocityTime=0,lastDragSample=null;
  const rangeBtn=wrap.querySelector('[data-action="range"]'),inBtn=wrap.querySelector('[data-action="in"]'),outBtn=wrap.querySelector('[data-action="out"]'),resetBtn=wrap.querySelector('[data-action="reset"]'),pointsBtn=wrap.querySelector('[data-action="points"]'),labelsBtn=wrap.querySelector('[data-action="labels"]'),compressBtn=wrap.querySelector('[data-action="compress"]'),focusBtn=wrap.querySelector('[data-action="focus"]');
@@ -311,9 +316,9 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
   if(a<scope0){a=scope0;b=a+span}if(b>scope1){b=scope1;a=b-span}
   view.x0=a;view.x1=b;
  }
- function rememberUi(){CHART_UI_STATE.set(resolvedRangeId,{showPoints,showLabels,compressTime,view:{x0:view.x0,x1:view.x1},rangeMode})}
+ function rememberUi(){CHART_UI_STATE.set(resolvedRangeId,{showPoints,showLabels,compressTime,compressPreference,view:{x0:view.x0,x1:view.x1},rangeMode})}
  function applyRangeMode(which,remember=true,restoreView=null){
-  rangeMode=which==='full'?'full':'local';[scope0,scope1]=rangeBounds(rangeMode);scopeSpan=scope1-scope0;setView(scope0,scope1);
+  rangeMode=which==='full'?'full':'local';compressTime=rangeMode==='local'&&compressPreference&&compressIdle&&idleWarp.gaps.length>0;if(compressBtn){compressBtn.hidden=rangeMode==='full';compressBtn.style.display=rangeMode==='full'?'none':'';}[scope0,scope1]=rangeBounds(rangeMode);scopeSpan=scope1-scope0;setView(scope0,scope1);
   if(restoreView&&Number.isFinite(restoreView.x0)&&Number.isFinite(restoreView.x1))setView(restoreView.x0,restoreView.x1);
   rangeBtn.dataset.range=rangeMode;rangeBtn.textContent=rangeLabel(rangeMode);rangeBtn.title=rangeMode==='local'?'当前：最近48小时（点此切换全赛季）':'当前：全赛季（点此切回最近48小时）';
   if(remember){if(rangeMode===GLOBAL_CHART_RANGE)CHART_RANGE_OVERRIDES.delete(resolvedRangeId);else CHART_RANGE_OVERRIDES.set(resolvedRangeId,rangeMode)}
@@ -341,11 +346,11 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
   if(!p||!Number.isFinite(p.v))return p?.ambiguous?'同名待确认':'未上榜';
   if(mode==='rank')return `第${fmt(p.v)}名`;
   if(mode==='gap')return `${p.v>=0?'+':''}${fmt(p.v)}分`;
-  const rank=Number.isFinite(Number(p.rank))?` · 第${fmt(p.rank)}名`:'',manual=p.source==='manual'?' · 补录':'';return `${fmt(p.v)}分${rank}${manual}`;
+  const rank=p.rank!=null&&Number.isFinite(Number(p.rank))?` · 第${fmt(p.rank)}名`:'',manual=p.source==='manual'?' · 补录':'';return `${fmt(p.v)}分${rank}${manual}`;
  }
  function redraw(){
   svg.replaceChildren();const span=currentSpan(),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t),mapped0=mapT(view.x0),mapped1=mapT(view.x1),mappedSpan=Math.max(1,mapped1-mapped0),x=t=>L+(mapT(t)-mapped0)/mappedSpan*plotW,visibleSeries=series.map(s=>({...s,points:visibleWithNeighbors(s.points,view.x0,view.x1)})),domainSeries=visibleSeries.map(s=>s.points.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v))),fallback=domainSeries.flat().length?domainSeries:series.map(s=>s.points.filter(p=>Number.isFinite(p.v))),visibleCuts=visibleWithNeighbors(cleanCuts,view.x0,view.x1),domainExtras=mode==='score'?visibleCuts.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v)):[],[d0,d1]=chartDomain([...fallback,domainExtras],mode),y=v=>mode==='rank'?T+(v-d1)/(d0-d1)*(H-T-B):T+(d1-v)/(d1-d0)*(H-T-B);
-  const defs=svgEl('defs'),clip=svgEl('clipPath',{id:clipId});clip.append(svgEl('rect',{x:L,y:T,width:plotW,height:H-T-B}));defs.append(clip);svg.append(defs);
+  const defs=svgEl('defs'),clip=svgEl('clipPath',{id:clipId});clip.append(svgEl('rect',{x:L,y:T,width:plotW,height:H-T-B+absenceLaneHeight}));defs.append(clip);svg.append(defs);
   for(let i=0;i<=4;i++){const value=mode==='rank'?d1+(d0-d1)*i/4:d0+(d1-d0)*i/4,py=y(value);svg.append(svgEl('line',{x1:L,x2:W-R,y1:py,y2:py,stroke:'#e2e6ef'}));svg.append(svgEl('text',{x:L-7,y:py+4,'text-anchor':'end',class:'axis'},String(Math.round(value))))}
   const label=t=>span<=2*DAY?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(t)):dateLabel(t);
   const middleTime=unmapT((mapped0+mapped1)/2);
@@ -361,6 +366,24 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
    lineSegments(pts).forEach(seg=>{if(seg.length>1)plot.append(svgEl('path',{d:pathFrom(seg,x,y),fill:'none',stroke:s.color,'stroke-width':3.2,'stroke-linecap':'round','stroke-linejoin':'round'}))});
    pts.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v)).forEach(p=>{const px=x(p.t),py=y(p.v),tip=tooltipText(s,p,mode);const hit=svgEl('circle',{cx:px,cy:py,r:10,fill:'transparent','pointer-events':'all'});hit.append(svgEl('title',{},tip));plot.append(hit);if(showPoints)plot.append(marker(s.shape,px,py,s.color,p.source==='manual',tip))});
   });svg.append(plot);
+  if(absentSeries.length){
+   const base=H-B,lanes=svgEl('g',{'clip-path':`url(#${clipId})`});
+   svg.append(svgEl('rect',{x:L,y:base+5,width:plotW,height:absenceLaneHeight-5,fill:'#f2f4f8',rx:4}));
+   svg.append(svgEl('text',{x:L-7,y:base+19,'text-anchor':'end',fill:'#7d879b','font-size':9},'未上榜'));
+   absentSeries.forEach((s,i)=>{const ly=base+16+i*12;let lastEnd=null;
+    s.runs.filter(r=>r.end>=view.x0&&r.start<=view.x1).forEach(r=>{
+     const a=x(Math.max(r.start,view.x0)),b=x(Math.min(r.end,view.x1)),tip=`${s.name} · 未上榜 · 分数和具体排名未知`;
+     if(r.before&&r.start>=view.x0&&r.start<=view.x1){const d=`M${x(r.before.t)},${y(r.before.v)} L${x(r.start)},${ly}`;const link=svgEl('path',{d,fill:'none',stroke:s.color,'stroke-width':1.7,'stroke-dasharray':'4 4',opacity:.7});link.append(svgEl('title',{},tip));lanes.append(link)}
+     let d=`M${a},${ly}`;for(let px=a+3;px<b;px+=3)d+=` L${px},${ly+Math.sin((px-a)/3)*1.8}`;d+=` L${b},${ly}`;
+     const wave=svgEl('path',{d,fill:'none',stroke:s.color,'stroke-width':2,'stroke-dasharray':'5 3','stroke-linecap':'round'});wave.append(svgEl('title',{},tip));lanes.append(wave);
+     if(b-a<1)lanes.append(svgEl('circle',{cx:a,cy:ly,r:2.8,fill:s.color}));
+     if(r.after&&r.end>=view.x0&&r.end<=view.x1){const link=svgEl('path',{d:`M${x(r.end)},${ly} L${x(r.after.t)},${y(r.after.v)}`,fill:'none',stroke:s.color,'stroke-width':1.7,'stroke-dasharray':'4 4',opacity:.7});link.append(svgEl('title',{},tip));lanes.append(link)}
+     lastEnd=b;
+    });
+    if(showLabels&&lastEnd!==null&&inspectionPoint(s.points,view.x1)?.found===false)svg.append(svgEl('text',{x:railTextX,y:ly+3,fill:s.color,'font-size':9,'font-weight':800},`${SHAPE_TEXT[s.shape]||'●'} 未上榜`));
+   });svg.append(lanes);
+  }
+
   if(compressTime&&mode==='score'&&series.length===1){
    idleWarp.gaps.filter(g=>g.end>=view.x0&&g.start<=view.x1).forEach(g=>{const a=Math.max(g.start,view.x0),b=Math.min(g.end,view.x1);if(b<=a)return;const mid=unmapT((mapT(a)+mapT(b))/2),px=x(mid),py=y(g.value),hours=(g.end-g.start)/3600000,tip=`连续约${hours.toFixed(hours<10?1:0)}小时分数未变化，横轴已压缩`;
     const axisMark=svgEl('text',{x:px,y:H-B+15,'text-anchor':'middle',fill:'#7d879b','font-size':15,'font-weight':950},'≈');axisMark.append(svgEl('title',{},tip));svg.append(axisMark);
@@ -373,14 +396,14 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
    if(pts.length){
     const max=pts.reduce((a,b)=>b.v>=a.v?b:a),min=pts.reduce((a,b)=>b.v<=a.v?b:a),latest=pts[pts.length-1],lastEvent=s.points[s.points.length-1],roles=new Map(),latestRole=lastEvent&&lastEvent.t>latest.t?'最近':'最新',candidates=max.v===min.v?[[latest,latestRole]]:[[max,'最高'],[min,'最低'],[latest,latestRole]];
     candidates.forEach(([p,role])=>{if(!visible(p))return;const key=`${p.t}|${p.v}|${p.source}`,item=roles.get(key)||{p,roles:[]};item.roles.push(role);roles.set(key,item)});
-    [...roles.values()].forEach(({p,roles})=>{const px=x(p.t),py=y(p.v),rank=mode==='score'&&Number.isFinite(Number(p.rank))?` · 第${fmt(p.rank)}名`:'',manual=p.source==='manual'?' · 补录':'';rail.push({kind:'series',s,p,px,py,ly:py,text:`${roles.join('/')} ${fmt(p.v)}分${rank}${manual}`,color:s.color})});
+    [...roles.values()].forEach(({p,roles})=>{const px=x(p.t),py=y(p.v),rank=mode==='score'&&p.rank!=null&&Number.isFinite(Number(p.rank))?` · 第${fmt(p.rank)}名`:'',manual=p.source==='manual'?' · 补录':'';rail.push({kind:'series',s,p,px,py,ly:py,text:`${roles.join('/')} ${fmt(p.v)}分${rank}${manual}`,color:s.color})});
    }
    if(mode==='score'&&finiteCuts.length){const p=finiteCuts[finiteCuts.length-1],py=y(p.v);rail.push({kind:'cut',p,px:Math.min(W-R,x(p.t)),py,ly:py,text:cutoffRailText(finiteCuts),color:'#ed684f'})}
    layoutRail(rail,T+15,H-B-8,21).forEach(item=>{svg.append(svgEl('line',{x1:item.px,y1:item.py,x2:railJoinX,y2:item.ly-4,stroke:item.color,'stroke-width':1,opacity:.48}));svg.append(svgEl('text',{x:railTextX,y:item.ly,'text-anchor':'start',class:item.kind==='cut'?'cut-label':'endpoint-label',fill:item.color},item.text))});
   }
 
   else if(showLabels&&effectiveLabelMode==='latest'){
-   const rail=series.map(s=>{const pts=s.points.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v));if(!pts.length)return null;const p=pts[pts.length-1],px=x(p.t),py=y(p.v),text=mode==='rank'?`第${fmt(p.v)}名`:mode==='gap'?`${p.v>=0?'+':''}${fmt(p.v)}`:`${fmt(p.v)}分`;return{kind:'series',s,p,px,py,ly:py,text,color:s.color}}).filter(Boolean);
+   const rail=series.map(s=>{const current=inspectionPoint(s.points,view.x1);if(showAbsence&&current?.source==='official'&&current.found===false)return null;const pts=s.points.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v));if(!pts.length)return null;const p=pts[pts.length-1],px=x(p.t),py=y(p.v),text=mode==='rank'?`第${fmt(p.v)}名`:mode==='gap'?`${p.v>=0?'+':''}${fmt(p.v)}`:`${fmt(p.v)}分`;return{kind:'series',s,p,px,py,ly:py,text,color:s.color}}).filter(Boolean);
    if(mode==='score'&&finiteCuts.length){const p=finiteCuts[finiteCuts.length-1],py=y(p.v);rail.push({kind:'cut',p,px:Math.min(W-R,x(p.t)),py,ly:py,text:cutoffRailText(finiteCuts),color:'#ed684f'})}
    layoutRail(rail).forEach(item=>{svg.append(svgEl('line',{x1:item.px,y1:item.py,x2:railJoinX,y2:item.ly-4,stroke:item.color,'stroke-width':1,opacity:.42}));svg.append(svgEl('text',{x:railTextX,y:item.ly,'text-anchor':'start',class:item.kind==='cut'?'cut-label':'endpoint-label',fill:item.color},item.text))});
   }else if(showLabels&&mode==='score'&&finiteCuts.length){
@@ -388,10 +411,10 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
   }
   if(Number.isFinite(inspectTime)&&inspectTime>=view.x0&&inspectTime<=view.x1){
    const px=x(inspectTime),entries=series.map(s=>({s,p:inspectionPoint(s.points,inspectTime)})),cutPoint=mode==='score'?inspectionPoint(cleanCuts,inspectTime):null,timeText=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(inspectTime));
-   svg.append(svgEl('line',{x1:px,x2:px,y1:T,y2:H-B,stroke:'#34415e','stroke-width':1.4,'stroke-dasharray':'4 4',opacity:.72}));
-   entries.forEach(({s,p})=>{if(!p||!Number.isFinite(p.v))return;const py=y(p.v);svg.append(svgEl('circle',{cx:px,cy:py,r:7.2,fill:'#fff',stroke:s.color,'stroke-width':3}))});
+   svg.append(svgEl('line',{x1:px,x2:px,y1:T,y2:H-B+absenceLaneHeight,stroke:'#34415e','stroke-width':1.4,'stroke-dasharray':'4 4',opacity:.72}));
+   entries.forEach(({s,p})=>{if(!p||!Number.isFinite(p.v)){const lane=absentSeries.findIndex(q=>q.id===s.id);if(p?.found===false&&lane>=0)svg.append(svgEl('circle',{cx:px,cy:H-B+16+lane*12,r:5,fill:'#fff',stroke:s.color,'stroke-width':2.5}));return}const py=y(p.v);svg.append(svgEl('circle',{cx:px,cy:py,r:7.2,fill:'#fff',stroke:s.color,'stroke-width':3}))});
    if(cutPoint&&Number.isFinite(cutPoint.v)){const py=y(cutPoint.v);svg.append(svgEl('circle',{cx:px,cy:py,r:6.5,fill:'#fff',stroke:'#ed684f','stroke-width':2.7}))}
-   const timeW=112,timeX=Math.max(L,Math.min(W-R-timeW,px-timeW/2)),timeY=H-B+5;svg.append(svgEl('rect',{x:timeX,y:timeY,width:timeW,height:23,rx:7,fill:'#263047'}));svg.append(svgEl('text',{x:timeX+timeW/2,y:timeY+15.5,'text-anchor':'middle',fill:'#fff','font-size':10.5,'font-weight':850},timeText));
+   const timeW=112,timeX=Math.max(L,Math.min(W-R-timeW,px-timeW/2)),timeY=H-B+absenceLaneHeight+5;svg.append(svgEl('rect',{x:timeX,y:timeY,width:timeW,height:23,rx:7,fill:'#263047'}));svg.append(svgEl('text',{x:timeX+timeW/2,y:timeY+15.5,'text-anchor':'middle',fill:'#fff','font-size':10.5,'font-weight':850},timeText));
    const panelEntries=[...entries.map(({s,p})=>({name:series.length>1?(s.name.length>8?s.name.slice(0,8)+'…':s.name):s.name,color:s.color,symbol:SHAPE_TEXT[s.shape]||'●',value:inspectionValue(p),known:!!p&&Number.isFinite(p.v)})),...(mode==='score'?[{name:'第500名进榜线',color:'#ed684f',symbol:'━',value:cutPoint&&Number.isFinite(cutPoint.v)?`${fmt(cutPoint.v)}分`:'暂无',known:!!cutPoint&&Number.isFinite(cutPoint.v)}]:[])];
    const panelW=series.length>1?248:218,rowH=21,panelH=31+panelEntries.length*rowH,panelX=Math.max(L+5,Math.min(W-R-panelW-5,px<(L+W-R)/2?px+12:px-panelW-12)),panelY=T+7;
    svg.append(svgEl('rect',{x:panelX,y:panelY,width:panelW,height:panelH,rx:10,fill:'#182033',opacity:.94}));svg.append(svgEl('text',{x:panelX+12,y:panelY+19,fill:'#dfe7ff','font-size':10.5,'font-weight':850},timeText));
@@ -422,7 +445,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  function updatePinch(){
   if(!pinch||pointers.size<2)return;const pts=[...pointers.values()].slice(0,2),dx=pts[1].x-pts[0].x,dy=pts[1].y-pts[0].y,dist=Math.max(8,Math.hypot(dx,dy)),midX=(pts[0].x+pts[1].x)/2,ratio=clientXToRatio(midX),newSpan=Math.min(scopeSpan,Math.max(currentMinSpan(),pinch.span*pinch.dist/dist));setView(pinch.anchor-ratio*newSpan,pinch.anchor-ratio*newSpan+newSpan);redraw();rememberUi();
  }
- rangeBtn.onclick=()=>applyRangeMode(rangeMode==='local'?'full':'local',true);inBtn.onclick=()=>zoomAt(.68);outBtn.onclick=()=>zoomAt(1.48);resetBtn.onclick=reset;pointsBtn.onclick=()=>{showPoints=!showPoints;redraw();rememberUi()};labelsBtn.onclick=()=>{showLabels=!showLabels;redraw();rememberUi()};if(compressBtn)compressBtn.onclick=()=>{if(!idleWarp.gaps.length)return;compressTime=!compressTime;compressBtn.title=compressTime?'当前已压缩长平台；点击还原真实时间':'当前为真实时间轴；点击压缩连续至少6小时不变的平台';redraw();rememberUi()};
+ rangeBtn.onclick=()=>applyRangeMode(rangeMode==='local'?'full':'local',true);inBtn.onclick=()=>zoomAt(.68);outBtn.onclick=()=>zoomAt(1.48);resetBtn.onclick=reset;pointsBtn.onclick=()=>{showPoints=!showPoints;redraw();rememberUi()};labelsBtn.onclick=()=>{showLabels=!showLabels;redraw();rememberUi()};if(compressBtn)compressBtn.onclick=()=>{if(rangeMode==='full'||!idleWarp.gaps.length)return;compressTime=!compressTime;compressPreference=compressTime;compressBtn.title=compressTime?'当前已压缩长平台；点击还原真实时间':'当前为真实时间轴；点击压缩连续至少6小时不变的平台';redraw();rememberUi()};
  svg.addEventListener('dblclick',e=>{if(!interactive||performance.now()-lastTouchEnd<600)return;e.preventDefault();reset()});
  svg.addEventListener('click',e=>{if(skipInspectClick){skipInspectClick=false;return}const coarse=window.matchMedia?.('(pointer:coarse)').matches||window.innerWidth<=700;if(coarse&&!wrap.classList.contains('focused')){const selected=clientXToTime(e.clientX);openFocus();requestAnimationFrame(()=>{if(ACTIVE_INSPECT_CLEAR&&ACTIVE_INSPECT_CLEAR!==clearInspection)ACTIVE_INSPECT_CLEAR();ACTIVE_INSPECT_CLEAR=clearInspection;inspectActive=true;inspectTime=selected;redraw()});return}inspectAt(e.clientX)});
  svg.addEventListener('pointerdown',e=>{
@@ -517,7 +540,7 @@ function renderLive(config,live,season){
  const personal=$('#personalCharts');personal.replaceChildren(),cutoffPoints=collapseFlat((live.snapshots||[]).filter(s=>Number(s.season)===season&&Number.isFinite(s.cutoff500)).map(s=>({t:time(s.captured_at),v:Number(s.cutoff500)})));
  config.players.forEach(player=>{const events=playerEvents(player.id,season,live);personal.append(lineChart([{id:player.id,name:player.name,color:player.color,shape:SHAPES[player.id],points:events}],{title:displayPlayerName(player),subtitle:'',cutoffs:cutoffPoints,bands:absenceBands(player.id,season,live),labelMode:'keys',rangeId:`personal:${player.id}:score`,compressIdle:true}))});
  const checks=$('#playerChecks');checks.replaceChildren();config.players.forEach(player=>{const label=document.createElement('label');label.innerHTML=`<input type="checkbox" data-player="${player.id}" ${COMPARE_SELECTED.get(player.id)===false?'':'checked'}><span class="shape-key" style="color:${player.color}">${SHAPE_TEXT[SHAPES[player.id]]}</span><span style="color:${player.color};font-weight:800">${displayPlayerName(player)}</span>`;checks.append(label)});
- const drawCompare=()=>{const selected=[...checks.querySelectorAll('input:checked')].map(x=>x.dataset.player),players=config.players.filter(p=>selected.includes(p.id)),base=p=>({id:p.id,name:displayPlayerName(p),color:p.color,shape:SHAPES[p.id]}),scoreSeries=players.map(p=>({...base(p),points:playerEvents(p.id,season,live)})),gapSeries=players.map(p=>({...base(p),points:playerEvents(p.id,season,live).map(e=>Number.isFinite(e.v)&&Number.isFinite(e.cut)?({...e,v:e.v-e.cut}):({...e,v:null}))})),rankSeries=players.map(p=>({...base(p),points:playerEvents(p.id,season,live).filter(e=>e.source==='official').map(e=>e.found&&Number.isFinite(Number(e.rank))?({...e,v:Number(e.rank)}):({...e,v:null}))}));const out=$('#compareCharts');out.replaceChildren();out.append(lineChart(scoreSeries,{title:'四主播分数对比',subtitle:'',cutoffs:cutoffPoints,labelMode:'latest',rangeId:'compare:score'}));out.append(lineChart(gapSeries,{mode:'gap',title:'距离第500名',subtitle:'',labelMode:'latest',rangeId:'compare:gap'}));const rank=lineChart(rankSeries,{mode:'rank',title:'上榜排名变化',subtitle:'',labelMode:'latest',rangeId:'compare:rank'});rank.classList.add('wide');out.append(rank)};checks.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>{COMPARE_SELECTED.set(x.dataset.player,x.checked);drawCompare()}));drawCompare();
+ const drawCompare=()=>{const selected=[...checks.querySelectorAll('input:checked')].map(x=>x.dataset.player),players=config.players.filter(p=>selected.includes(p.id)),base=p=>({id:p.id,name:displayPlayerName(p),color:p.color,shape:SHAPES[p.id]}),scoreSeries=players.map(p=>({...base(p),points:playerEvents(p.id,season,live)})),gapSeries=players.map(p=>({...base(p),points:playerEvents(p.id,season,live).map(e=>Number.isFinite(e.v)&&Number.isFinite(e.cut)?({...e,v:e.v-e.cut}):({...e,v:null}))})),rankSeries=players.map(p=>({...base(p),points:playerEvents(p.id,season,live).filter(e=>e.source==='official').map(e=>e.found&&Number.isFinite(Number(e.rank))?({...e,v:Number(e.rank)}):({...e,v:null}))}));const out=$('#compareCharts');out.replaceChildren();out.append(lineChart(scoreSeries,{title:'四主播分数对比',subtitle:'',cutoffs:cutoffPoints,labelMode:'latest',rangeId:'compare:score',showAbsence:true}));out.append(lineChart(gapSeries,{mode:'gap',title:'距离第500名',subtitle:'',labelMode:'latest',rangeId:'compare:gap',showAbsence:true}));const rank=lineChart(rankSeries,{mode:'rank',title:'上榜排名变化',subtitle:'',labelMode:'latest',rangeId:'compare:rank',showAbsence:true});rank.classList.add('wide');out.append(rank)};checks.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>{COMPARE_SELECTED.set(x.dataset.player,x.checked);drawCompare()}));drawCompare();
 }
 function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return(h>>>0)/4294967295}
 function historySeries(s){const anchors=[[time(s.start+'T00:00:00Z'),s.startV],...(s.guides||[]).map(p=>[time(p[0]+'T00:00:00Z'),p[1]]),...s.points.map(p=>[time(p[0]+'T00:00:00Z'),p[1]]),[time(s.end+'T00:00:00Z'),s.endV]].sort((a,b)=>a[0]-b[0]).filter((p,i,a)=>!i||p[0]!==a[i-1][0]),out=[];for(let i=0;i<anchors.length-1;i++){const[a,av]=anchors[i],[b,bv]=anchors[i+1],days=Math.max(1,Math.round((b-a)/DAY)),seed=hash(s.id+i),cycles=days>16?2:days>7?1.35:.65;for(let d=0;d<=days;d++){if(i&&d===0)continue;const t=d/days,e=t*t*(3-2*t),base=av+(bv-av)*e,envelope=Math.sin(Math.PI*t),wave=Math.sin(2*Math.PI*cycles*t+seed*4-2)*.72+Math.sin(4*Math.PI*cycles*t+seed*7)*.28;out.push({t:a+d*DAY,v:Math.max(s.floor,Math.min(s.ceil,base+envelope*wave*s.vol))})}}return out}
