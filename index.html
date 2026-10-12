@@ -182,7 +182,12 @@ function dayBaselineSnapshot(snaps,currentT){
  return eligible[0]||null;
 }
 function latestCurrentManual(playerId,season,live,snapshot){
- if(!snapshot)return null;const snapT=time(snapshot.captured_at),items=(live.manual_records||[]).filter(r=>Number(r.season)===season&&r.player_id===playerId&&Number.isFinite(Number(r.score))&&time(r.captured_at)>=snapT).sort((a,b)=>time(a.captured_at)-time(b.captured_at));return items[items.length-1]||null;
+ if(!snapshot)return null;
+ const snapT=time(snapshot.captured_at),lastFound=seasonSnapshots(live,season).filter(s=>time(s.captured_at)<=snapT&&s.players?.[playerId]?.found&&Number.isFinite(Number(s.players[playerId].score))).reduce((t,s)=>Math.max(t,time(s.captured_at)),-Infinity);
+ // An absent check contains no new score. Retain the latest owner score until
+ // a later official appearance supersedes it; never carry it across seasons.
+ const items=(live.manual_records||[]).filter(r=>Number(r.season)===season&&r.player_id===playerId&&r.score!=null&&Number.isFinite(Number(r.score))&&time(r.captured_at)>=lastFound&&time(r.captured_at)<=Math.max(snapT,Number(live.current_season)===Number(season)?Date.now():snapT)).sort((a,b)=>time(a.captured_at)-time(b.captured_at));
+ return items[items.length-1]||null;
 }
 function change(dir,amount,estimated=false){amount=Math.max(0,Math.round(Number(amount)||0));return{dir,amount,estimated}}
 function exactChange(delta){if(!Number.isFinite(delta))return null;if(delta>0)return change('up',delta);if(delta<0)return change('down',-delta);return change('flat',0)}
@@ -221,7 +226,7 @@ function previousDistinctPlayerSnapshot(snaps,currentT,playerId,metric,currentVa
 function playerDeltas(playerId,season,live,snapshot){
  if(!snapshot)return{score:{previous:null,today:null},rank:{previous:null,today:null},ctx:null};
  const snaps=seasonSnapshots(live,season),snapT=time(snapshot.captured_at),ctx=playerCurrentContext(playerId,season,live,snapshot);ctx.playerId=playerId;
- const currentT=ctx.manual?time(ctx.manual.captured_at):snapT,dayBase=dayBaselineSnapshot(snaps,currentT);
+ const currentT=ctx.manual?Math.max(snapT,time(ctx.manual.captured_at)):snapT,dayBase=dayBaselineSnapshot(snaps,currentT);
  // “较上次”=较上一条不同值；连续几轮未变化不会把变化量冲成 0。
  const priorScore=previousDistinctPlayerSnapshot(snaps,currentT,playerId,'score',ctx.exactScore);
  const priorRank=previousDistinctPlayerSnapshot(snaps,currentT,playerId,'rank',ctx.rank);
