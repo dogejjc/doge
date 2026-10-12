@@ -50372,7 +50372,20 @@
       }
     }
   ],
-  "manual_records": [],
+  "manual_records": [
+    {
+      "captured_at": "2026-10-12T14:42:00+08:00",
+      "season": 9,
+      "player_id": "daoge",
+      "score": 3824,
+      "rank": null,
+      "found": false,
+      "cutoff500": 5757,
+      "source": "manual",
+      "entered_by": "owner",
+      "note": ""
+    }
+  ],
   "last_checked_at": "2026-10-12T10:00:22+08:00",
   "schedule_minutes": [
     0,
