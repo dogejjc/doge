@@ -271,9 +271,21 @@ function absenceRuns(points){
  const checks=points.filter(p=>p.source==='official').sort((a,b)=>a.t-b.t),runs=[];let active=null,previous=null;
  checks.forEach(p=>{if(p.found===false){if(!active)active={start:p.t,end:p.t,before:previous&&Number.isFinite(previous.v)?previous:null,after:null};active.end=p.t}else if(active){active.end=p.t;active.after=Number.isFinite(p.v)?p:null;runs.push(active);active=null}previous=p});if(active)runs.push(active);return runs;
 }
+function timeWarpFromGaps(gaps){
+ const map=t=>{let out=t;for(const g of gaps){const saved=g.end-g.start-g.shown;if(t>=g.end)out-=saved;else if(t>g.start){out-=(t-g.start)*saved/(g.end-g.start);break}else break}return out};
+ const unmap=w=>{let saved=0;for(const g of gaps){const a=g.start-saved,b=a+g.shown;if(w>=b)saved+=g.end-g.start-g.shown;else if(w>a)return g.start+(w-a)*(g.end-g.start)/g.shown;else break}return w+saved};return{gaps,map,unmap};
+}
+function trendTimeWarp(inputSeries){
+ const min=3*60*60*1000,flatShown=60000,absentShown=30*60000;
+ const perSeries=inputSeries.map(s=>[...idleTimeWarp(s.points,min,flatShown).gaps.map(g=>({...g,kind:'flat'})),...absenceRuns(s.points).filter(r=>r.end-r.start>=min).map(r=>({start:r.start,end:r.end,kind:'absent'}))].sort((a,b)=>a.start-b.start));
+ if(!perSeries.length||perSeries.some(g=>!g.length))return timeWarpFromGaps([]);
+ const bounds=[...new Set(perSeries.flatMap(gs=>gs.flatMap(g=>[g.start,g.end])))].sort((a,b)=>a-b),segments=[];
+ for(let i=1;i<bounds.length;i++){const start=bounds[i-1],end=bounds[i],cover=perSeries.map(gs=>gs.find(g=>g.start<=start&&g.end>=end));if(cover.some(g=>!g))continue;const kind=cover.some(g=>g.kind==='absent')?'absent':'flat',last=segments.at(-1);if(last&&last.end===start&&last.kind===kind)last.end=end;else segments.push({start,end,kind})}
+ const gaps=segments.filter(g=>g.end-g.start>=min).map(g=>({...g,shown:Math.min(g.end-g.start,g.kind==='absent'?absentShown:flatShown)}));return timeWarpFromGaps(gaps);
+}
 function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtitle='',labelMode='auto',rangeId='',compressIdle=false,showAbsence=false }={}){
  const rawSeries=inputSeries.map(s=>({...s,shape:s.shape||SHAPES[s.id]||'circle'})),effectiveLabelMode=labelMode==='auto'?(rawSeries.length===1&&mode==='score'?'keys':'latest'):labelMode;
- const idleWarp=compressIdle&&mode==='score'&&rawSeries.length===1?idleTimeWarp(rawSeries[0].points):{gaps:[],map:t=>t,unmap:t=>t};
+ const localWarp=compressIdle&&mode==='score'&&rawSeries.length===1?idleTimeWarp(rawSeries[0].points):timeWarpFromGaps([]),fullWarp=compressIdle||showAbsence?trendTimeWarp(rawSeries):timeWarpFromGaps([]);let idleWarp=localWarp;
  const series=rawSeries.map(s=>({...s,points:collapseFlat(s.points)})),cleanCuts=collapseFlat(cutoffs),wrap=document.createElement('article');wrap.className='chart-card';
  const sub=subtitle?`<div class="chart-sub">${subtitle}</div>`:'';
  wrap.innerHTML=`<div class="chart-head"><div><div class="chart-title-wrap"><h3>${title}</h3><button class="chart-range-btn" data-action="range" type="button" title="切换这张图的显示范围">48h</button></div>${sub}</div><div class="chart-actions"><button data-action="out" title="缩小时间范围">−</button><button data-action="in" title="放大时间范围">＋</button><button data-action="points" title="显示或隐藏采样点">•</button><button data-action="labels" title="显示或隐藏图内数值标注">字</button>${compressIdle?'<button data-action="compress" title="压缩或还原连续至少6小时不变的时间段">≈</button>':''}<button data-action="reset" title="恢复当前范围">↺</button><button data-action="focus" title="大图查看（手机推荐）">⛶</button></div></div>`;
@@ -318,7 +330,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  }
  function rememberUi(){CHART_UI_STATE.set(resolvedRangeId,{showPoints,showLabels,compressTime,compressPreference,view:{x0:view.x0,x1:view.x1},rangeMode})}
  function applyRangeMode(which,remember=true,restoreView=null){
-  rangeMode=which==='full'?'full':'local';compressTime=rangeMode==='local'&&compressPreference&&compressIdle&&idleWarp.gaps.length>0;if(compressBtn){compressBtn.hidden=rangeMode==='full';compressBtn.style.display=rangeMode==='full'?'none':'';}[scope0,scope1]=rangeBounds(rangeMode);scopeSpan=scope1-scope0;setView(scope0,scope1);
+  rangeMode=which==='full'?'full':'local';idleWarp=rangeMode==='full'?fullWarp:localWarp;compressTime=rangeMode==='full'?fullWarp.gaps.length>0:compressPreference&&compressIdle&&localWarp.gaps.length>0;if(compressBtn){compressBtn.hidden=rangeMode==='full';compressBtn.style.display=rangeMode==='full'?'none':'';}[scope0,scope1]=rangeBounds(rangeMode);scopeSpan=scope1-scope0;setView(scope0,scope1);
   if(restoreView&&Number.isFinite(restoreView.x0)&&Number.isFinite(restoreView.x1))setView(restoreView.x0,restoreView.x1);
   rangeBtn.dataset.range=rangeMode;rangeBtn.textContent=rangeLabel(rangeMode);rangeBtn.title=rangeMode==='local'?'当前：最近48小时（点此切换全赛季）':'当前：全赛季（点此切回最近48小时）';
   if(remember){if(rangeMode===GLOBAL_CHART_RANGE)CHART_RANGE_OVERRIDES.delete(resolvedRangeId);else CHART_RANGE_OVERRIDES.set(resolvedRangeId,rangeMode)}
@@ -384,7 +396,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
    });svg.append(lanes);
   }
 
-  if(compressTime&&mode==='score'&&series.length===1){
+  if(rangeMode==='local'&&compressTime&&mode==='score'&&series.length===1){
    idleWarp.gaps.filter(g=>g.end>=view.x0&&g.start<=view.x1).forEach(g=>{const a=Math.max(g.start,view.x0),b=Math.min(g.end,view.x1);if(b<=a)return;const mid=unmapT((mapT(a)+mapT(b))/2),px=x(mid),py=y(g.value),hours=(g.end-g.start)/3600000,tip=`连续约${hours.toFixed(hours<10?1:0)}小时分数未变化，横轴已压缩`;
     const axisMark=svgEl('text',{x:px,y:H-B+15,'text-anchor':'middle',fill:'#7d879b','font-size':15,'font-weight':950},'≈');axisMark.append(svgEl('title',{},tip));svg.append(axisMark);
     if(py>=T&&py<=H-B){const cover=svgEl('rect',{x:px-9,y:py-8,width:18,height:16,rx:5,fill:'#fff',opacity:.94});cover.append(svgEl('title',{},tip));svg.append(cover);const mark=svgEl('text',{x:px,y:py+5,'text-anchor':'middle',fill:series[0].color,'font-size':16,'font-weight':950},'≈');mark.append(svgEl('title',{},tip));svg.append(mark)}
