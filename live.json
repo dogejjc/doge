@@ -1,5 +1,5 @@
 {
-  "current_season": 9,
+  "current_season": 10,
   "snapshots": [
     {
       "captured_at": "2026-09-05T19:25:27+08:00",
@@ -51514,6 +51514,40 @@
           "matched_alias": "人五人六"
         }
       }
+    },
+    {
+      "captured_at": "2026-10-14T21:06:07+08:00",
+      "season": 10,
+      "first_place_score": 1847,
+      "first_place_name": "狐狸不成精",
+      "cutoff500": null,
+      "leaderboard_total": 4,
+      "players": {
+        "daoge": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "zangmu": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "dayan": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "renwurenliu": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        }
+      }
     }
   ],
   "manual_records": [
@@ -51578,11 +51612,11 @@
       "note": "封榜"
     }
   ],
-  "last_checked_at": "2026-10-14T15:29:29+08:00",
+  "last_checked_at": "2026-10-14T21:06:07+08:00",
   "schedule_minutes": [
     7,
     27,
     47
   ],
-  "last_data_change_at": "2026-10-14T06:59:36+08:00"
+  "last_data_change_at": "2026-10-14T21:06:07+08:00"
 }
