@@ -51956,6 +51956,40 @@
           "matched_alias": null
         }
       }
+    },
+    {
+      "captured_at": "2026-10-17T02:13:41+08:00",
+      "season": 10,
+      "first_place_score": 6061,
+      "first_place_name": "长夜行",
+      "cutoff500": null,
+      "leaderboard_total": 275,
+      "players": {
+        "daoge": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "zangmu": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "dayan": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "renwurenliu": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        }
+      }
     }
   ],
   "manual_records": [
@@ -52020,11 +52054,11 @@
       "note": "封榜"
     }
   ],
-  "last_checked_at": "2026-10-16T22:19:47+08:00",
+  "last_checked_at": "2026-10-17T02:13:41+08:00",
   "schedule_minutes": [
     7,
     27,
     47
   ],
-  "last_data_change_at": "2026-10-16T22:19:47+08:00"
+  "last_data_change_at": "2026-10-17T02:13:41+08:00"
 }
