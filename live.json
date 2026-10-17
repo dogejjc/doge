@@ -52194,6 +52194,40 @@
           "matched_alias": null
         }
       }
+    },
+    {
+      "captured_at": "2026-10-18T01:23:07+08:00",
+      "season": 10,
+      "first_place_score": 6266,
+      "first_place_name": "福笑楞",
+      "cutoff500": 1946,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "zangmu": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "dayan": {
+          "found": true,
+          "rank": 10,
+          "score": 5634,
+          "matched_alias": "我爱李大燕丶"
+        },
+        "renwurenliu": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        }
+      }
     }
   ],
   "manual_records": [
@@ -52258,11 +52292,11 @@
       "note": "封榜"
     }
   ],
-  "last_checked_at": "2026-10-17T22:10:17+08:00",
+  "last_checked_at": "2026-10-18T01:23:07+08:00",
   "schedule_minutes": [
     7,
     27,
     47
   ],
-  "last_data_change_at": "2026-10-17T22:10:17+08:00"
+  "last_data_change_at": "2026-10-18T01:23:07+08:00"
 }
