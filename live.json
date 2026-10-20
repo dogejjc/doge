@@ -52772,6 +52772,40 @@
           "matched_alias": null
         }
       }
+    },
+    {
+      "captured_at": "2026-10-20T13:21:26+08:00",
+      "season": 10,
+      "first_place_score": 6748,
+      "first_place_name": "石皇",
+      "cutoff500": 3969,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "zangmu": {
+          "found": true,
+          "rank": 49,
+          "score": 5628,
+          "matched_alias": "最后一只脏牧"
+        },
+        "dayan": {
+          "found": true,
+          "rank": 3,
+          "score": 6631,
+          "matched_alias": "我爱李大燕丶"
+        },
+        "renwurenliu": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        }
+      }
     }
   ],
   "manual_records": [
@@ -52836,11 +52870,11 @@
       "note": "封榜"
     }
   ],
-  "last_checked_at": "2026-10-20T08:41:32+08:00",
+  "last_checked_at": "2026-10-20T13:21:26+08:00",
   "schedule_minutes": [
     7,
     27,
     47
   ],
-  "last_data_change_at": "2026-10-20T08:41:32+08:00"
+  "last_data_change_at": "2026-10-20T13:21:26+08:00"
 }
