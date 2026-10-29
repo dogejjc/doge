@@ -54589,6 +54589,40 @@
           "matched_alias": "人五人六"
         }
       }
+    },
+    {
+      "captured_at": "2026-10-29T19:47:32+08:00",
+      "season": 10,
+      "first_place_score": 8014,
+      "first_place_name": "我爱李大燕丶",
+      "cutoff500": 5216,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "zangmu": {
+          "found": true,
+          "rank": 302,
+          "score": 5475,
+          "matched_alias": "最后一只脏牧"
+        },
+        "dayan": {
+          "found": true,
+          "rank": 1,
+          "score": 8014,
+          "matched_alias": "我爱李大燕丶"
+        },
+        "renwurenliu": {
+          "found": true,
+          "rank": 42,
+          "score": 6453,
+          "matched_alias": "人五人六"
+        }
+      }
     }
   ],
   "manual_records": [
@@ -54653,11 +54687,11 @@
       "note": "封榜"
     }
   ],
-  "last_checked_at": "2026-10-29T13:36:37+08:00",
+  "last_checked_at": "2026-10-29T19:47:32+08:00",
   "schedule_minutes": [
     7,
     27,
     47
   ],
-  "last_data_change_at": "2026-10-29T13:36:37+08:00"
+  "last_data_change_at": "2026-10-29T19:47:32+08:00"
 }
