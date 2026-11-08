@@ -383,6 +383,25 @@ def apply_website_issue(args, actor):
     if not isinstance(payload, dict):
         raise ValueError("Invalid request payload")
     action = payload.get("action")
+    if action == "set_season_start":
+        ensure_data_files()
+        live, config = read_json(LIVE_FILE), read_json(PLAYERS_FILE)
+        season = parse_season(payload.get("season"), live.get("current_season", 9))
+        if season != int(live.get("current_season", 9)) and not any(int(s.get("season", 0)) == season for s in live.get("snapshots", [])):
+            raise ValueError("Unknown season")
+        text = str(payload.get("start_date", "")).strip()
+        parsed = datetime.strptime(text, "%Y-%m-%d")
+        if parsed.strftime("%Y-%m-%d") != text:
+            raise ValueError("Start date must use YYYY-MM-DD")
+        if parsed.date() > datetime.now(TZ).date():
+            raise ValueError("Start date cannot be in the future")
+        first_dates = [datetime.fromisoformat(s["captured_at"]).astimezone(TZ).date() for s in live.get("snapshots", []) if int(s.get("season", 0)) == season and int(s.get("leaderboard_total") or 0) > 0]
+        if first_dates and parsed.date() > min(first_dates):
+            raise ValueError("Start date cannot be later than the first saved leaderboard")
+        config.setdefault("season_start_dates", {})[str(season)] = text
+        write_json(PLAYERS_FILE, config)
+        print(f"Season S{season} start date set to {text}")
+        return
     if action == "manual_score":
         # Reuse score validation, internal player lookup, append-only and duplicate checks.
         forwarded = argparse.Namespace(player=str(payload.get("player_id", "")),
@@ -441,6 +460,7 @@ def merge_missing(existing, incoming):
 
 
 def merge_players(current, incoming):
+    merge_missing(current.setdefault("season_start_dates", {}), incoming.get("season_start_dates", {}))
     by_id = {p.get("id"): p for p in current.get("players", []) if p.get("id")}
     for imported in incoming.get("players", []):
         pid = imported.get("id")
