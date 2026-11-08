@@ -22,7 +22,8 @@
     @media(max-width:700px){.player-card{height:auto;min-height:0;overflow:visible}.score-line{flex-wrap:wrap}.meta-row{margin-top:5px;padding-top:0}main{padding:14px 11px 36px}header{padding:21px 18px 17px;border-radius:18px}.tabs{margin-top:17px}.tab{flex:1;padding:9px 8px}.status-grid,.leaderboard-strip,.chart-grid,#historyGrid,.history-summary{grid-template-columns:1fr}.wide{grid-column:auto}.bar{align-items:flex-start;flex-direction:column}.live-tools{justify-content:flex-start}.updated{text-align:left;width:100%}.score{font-size:28px}.score-line{align-items:center}.chart-card{padding:14px 11px 10px}.chart-head{gap:7px}.chart-actions{gap:7px}.chart-actions button{width:40px;height:40px;border-radius:11px;font-size:18px}.chart-range-btn{height:34px;min-width:52px;padding:0 10px;font-size:12px}.chart-card svg{margin-top:6px;touch-action:pan-y pinch-zoom;overscroll-behavior-x:contain}.chart-card.focused{inset:max(5px,env(safe-area-inset-top)) max(5px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left));border-radius:14px;padding:10px}.chart-card.focused .chart-head{align-items:center}.chart-card.focused .chart-sub{font-size:11px}.chart-card.focused svg{height:calc(100dvh - 118px);touch-action:none!important}.section-title{align-items:flex-start;flex-direction:column}.section-title span{line-height:1.5}.chart-sub{line-height:1.45}}
     .state.ambiguous{color:#8a5a00;background:#fff3cd}.player-card.ambiguous .score-note,.player-card.duplicate-auto .score-note{color:#8a5a00;font-weight:800}.duplicate-manage-btn{background:#fff7dd;color:#805500;border:1px solid #efd58a}.duplicate-manage-btn:not(.hidden){display:inline-flex!important;align-items:center;gap:5px}.duplicate-dialog{width:min(560px,calc(100vw - 24px));border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px rgba(14,24,49,.28);color:var(--ink)}.duplicate-dialog::backdrop{background:rgba(17,25,44,.55);backdrop-filter:blur(3px)}.duplicate-dialog-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;border-bottom:1px solid #edf0f6}.duplicate-dialog-head h3{margin:0;font-size:19px}.duplicate-dialog-close{width:36px;height:36px;border:0;border-radius:9px;background:#f1f4fa;font-size:20px;cursor:pointer}.duplicate-form{display:grid;gap:14px;padding:18px 20px 20px}.duplicate-field{display:grid;gap:6px}.duplicate-field span{font-size:13px;font-weight:850;color:#4e5b73}.duplicate-field select{width:100%;font-size:14px;padding:10px}.duplicate-help{font-size:12px;color:var(--muted);line-height:1.55;background:#f7f9fd;border-radius:10px;padding:10px 12px}.duplicate-submit{display:flex;justify-content:flex-end;gap:8px}.duplicate-submit button{border:0;border-radius:10px;padding:10px 15px;font-weight:850;cursor:pointer}.duplicate-cancel{background:#eef1f7;color:#4e5b73}.duplicate-go{background:#263f83;color:#fff}
     .duplicate-field input,.duplicate-field textarea{width:100%;padding:10px;border:1px solid #dce2ee;border-radius:9px;font:inherit}.duplicate-field textarea{resize:vertical}.review-options{font-size:12px;color:var(--muted)}.stale-warning{color:#b45309;font-weight:800}
-  </style>
+  .player-card{height:auto;min-height:252px}.state.off small{display:block;font-size:10px;line-height:1.4;font-weight:750;white-space:nowrap}.state.off.has-duration{padding:4px 10px}.season-timeline{margin:4px 0 2px;padding:10px 12px;border:1px solid #e4e8f0;border-radius:10px;background:#fafbfe}.season-timeline[hidden]{display:none}.timeline-head{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#66738b;margin-bottom:7px}.timeline-head strong{color:#42516a}.timeline-key{display:inline-flex;align-items:center;gap:4px}.timeline-dot{display:inline-block;width:8px;height:8px;border-radius:2px;background:#939eae}.timeline-dot.on{background:var(--timeline-color)}.timeline-bar{display:flex;height:22px;border-radius:5px;overflow:hidden;background:#edf0f5}.timeline-segment{height:100%;min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;color:white;font-size:10px;font-weight:800}.timeline-segment.off{background:#939eae}.timeline-segment.on{background:var(--timeline-color)}.timeline-segment.unknown{background:repeating-linear-gradient(45deg,#e0e4eb,#e0e4eb 4px,#f7f8fa 4px,#f7f8fa 8px)}.timeline-dates{display:flex;justify-content:space-between;font-size:10px;color:#8993a5;margin-top:5px}@media(max-width:700px){.player-card{min-height:0}.timeline-head{font-size:10px;flex-wrap:wrap}.state.off small{font-size:9px}}
+</style>
 </head>
 <body><main>
   <header>
@@ -158,6 +159,21 @@ function absenceBands(playerId,season,live){
  if(start!==null&&timeline.length){const end=timeline[timeline.length-1].t;if(end>start)bands.push({start,end})}return bands;
 }
 function seasonSnapshots(live,season){return (live.snapshots||[]).filter(x=>Number(x.season)===season).sort((a,b)=>time(a.captured_at)-time(b.captured_at))}
+function currentAbsence(playerId,season,live){
+ const snaps=seasonSnapshots(live,season),last=snaps.at(-1),state=last?.players?.[playerId];
+ if(!state||state.found!==false||state.ambiguous)return null;
+ let start=time(last.captured_at);
+ for(let i=snaps.length-2;i>=0;i--){const p=snaps[i].players?.[playerId];if(!p||p.found!==false||p.ambiguous)break;start=time(snaps[i].captured_at)}
+ const checked=Number(season)===Number(live.current_season)?time(live.last_checked_at):NaN,end=Math.max(time(last.captured_at),Number.isFinite(checked)?checked:0);
+ return{start,end,hours:Math.max(0,end-start)/3600000};
+}
+function durationDays(hours){return (Math.max(0,hours)/24).toFixed(1)}
+function absenceHours(hours){return `${Math.floor(Math.max(0,hours)*10)/10}小时 · ${durationDays(hours)}天`}
+function officialStatusRuns(points){
+ const checks=points.filter(p=>p.source==='official').sort((a,b)=>a.t-b.t),runs=[];
+ checks.forEach(p=>{const state=p.ambiguous||typeof p.found!=='boolean'?'unknown':p.found?'on':'off',last=runs.at(-1);if(last&&last.state===state)last.end=p.t;else{if(last)last.end=p.t;runs.push({start:p.t,end:p.t,state})}});
+ return runs;
+}
 function latestSnapshot(live,season){const items=seasonSnapshots(live,season);return items[items.length-1]}
 function seasonPlayerStats(playerId,season,live){
  const snaps=seasonSnapshots(live,season);let highScore=null,highScoreAt=null,bestRank=null,bestRankAt=null,onboardMs=0,estimatedMs=0,previous=null;
@@ -281,12 +297,12 @@ function timeWarpFromGaps(gaps){
  const unmap=w=>{let saved=0;for(const g of gaps){const a=g.start-saved,b=a+g.shown;if(w>=b)saved+=g.end-g.start-g.shown;else if(w>a)return g.start+(w-a)*(g.end-g.start)/g.shown;else break}return w+saved};return{gaps,map,unmap};
 }
 function trendTimeWarp(inputSeries){
- const min=3*60*60*1000,flatShown=60000,absentShown=30*60000;
+ const min=3*60*60*1000,flatShown=60000;
  const perSeries=inputSeries.map(s=>[...idleTimeWarp(s.points,min,flatShown).gaps.map(g=>({...g,kind:'flat'})),...absenceRuns(s.points).filter(r=>r.end-r.start>=min).map(r=>({start:r.start,end:r.end,kind:'absent'}))].sort((a,b)=>a.start-b.start));
  if(!perSeries.length||perSeries.some(g=>!g.length))return timeWarpFromGaps([]);
  const bounds=[...new Set(perSeries.flatMap(gs=>gs.flatMap(g=>[g.start,g.end])))].sort((a,b)=>a-b),segments=[];
  for(let i=1;i<bounds.length;i++){const start=bounds[i-1],end=bounds[i],cover=perSeries.map(gs=>gs.find(g=>g.start<=start&&g.end>=end));if(cover.some(g=>!g))continue;const kind=cover.some(g=>g.kind==='absent')?'absent':'flat',last=segments.at(-1);if(last&&last.end===start&&last.kind===kind)last.end=end;else segments.push({start,end,kind})}
- const gaps=segments.filter(g=>g.end-g.start>=min).map(g=>({...g,shown:Math.min(g.end-g.start,g.kind==='absent'?absentShown:flatShown)}));return timeWarpFromGaps(gaps);
+ const gaps=segments.filter(g=>g.end-g.start>=min).map(g=>({...g,shown:Math.min(g.end-g.start,g.kind==='absent'?Math.max(6*60*60*1000,(g.end-g.start)*.35):flatShown)}));return timeWarpFromGaps(gaps);
 }
 function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtitle='',labelMode='auto',rangeId='',compressIdle=false,showAbsence=false }={}){
  const rawSeries=inputSeries.map(s=>({...s,shape:s.shape||SHAPES[s.id]||'circle'})),effectiveLabelMode=labelMode==='auto'?(rawSeries.length===1&&mode==='score'?'keys':'latest'):labelMode;
@@ -294,6 +310,8 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  const series=rawSeries.map(s=>({...s,points:collapseFlat(s.points)})),cleanCuts=collapseFlat(cutoffs),wrap=document.createElement('article');wrap.className='chart-card';
  const sub=subtitle?`<div class="chart-sub">${subtitle}</div>`:'';
  wrap.innerHTML=`<div class="chart-head"><div><div class="chart-title-wrap"><h3>${title}</h3><button class="chart-range-btn" data-action="range" type="button" title="切换这张图的显示范围">48h</button></div>${sub}</div><div class="chart-actions"><button data-action="out" title="缩小时间范围">−</button><button data-action="in" title="放大时间范围">＋</button><button data-action="points" title="显示或隐藏采样点">•</button><button data-action="labels" title="显示或隐藏图内数值标注">字</button>${compressIdle?'<button data-action="compress" title="压缩或还原连续至少6小时不变的时间段">≈</button>':''}<button data-action="reset" title="恢复当前范围">↺</button><button data-action="focus" title="大图查看（手机推荐）">⛶</button></div></div>`;
+ const statusTimeline=rawSeries.length===1&&compressIdle?document.createElement('div'):null;
+ if(statusTimeline){statusTimeline.className='season-timeline';statusTimeline.style.setProperty('--timeline-color',rawSeries[0].color);statusTimeline.hidden=true}
  const absentSeries=showAbsence?rawSeries.map(s=>({...s,runs:absenceRuns(s.points)})).filter(s=>s.runs.length):[],absenceLaneHeight=absentSeries.length?18+absentSeries.length*12:0;
  const finite=series.flatMap(s=>s.points.filter(p=>Number.isFinite(p.v)));if(!finite.length&&!bands.length&&!absentSeries.length){const e=document.createElement('div');e.className='empty';e.textContent=mode==='rank'?'本季暂无上榜排名':'本季暂无分数记录';wrap.append(e);return wrap}
  const W=840,H=305+absenceLaneHeight,L=54,T=30,B=40+absenceLaneHeight,hasCutoff=mode==='score'&&cleanCuts.some(p=>Number.isFinite(p.v)),needsRail=effectiveLabelMode==='latest'||hasCutoff,R=needsRail?158:30,plotW=W-L-R,railJoinX=W-R+7,railTextX=W-R+15;
@@ -366,6 +384,16 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
   const rank=p.rank!=null&&Number.isFinite(Number(p.rank))?` · 第${fmt(p.rank)}名`:'',manual=p.source==='manual'?' · 补录':'';return `${fmt(p.v)}分${rank}${manual}`;
  }
  function redraw(){
+  if(statusTimeline){
+   statusTimeline.hidden=rangeMode!=='full';statusTimeline.replaceChildren();
+   if(rangeMode==='full'){
+    const runs=officialStatusRuns(rawSeries[0].points),start=runs[0]?.start,end=runs.at(-1)?.end,total=end-start,off=runs.filter(r=>r.state==='off').reduce((n,r)=>n+r.end-r.start,0),head=document.createElement('div');head.className='timeline-head';
+    head.innerHTML=`<strong>上榜时间轴</strong><span><span class="timeline-key"><i class="timeline-dot on"></i>上榜</span>　<span class="timeline-key"><i class="timeline-dot"></i>未上榜${total>0?` ${Math.round(off/total*100)}%`:''}</span></span>`;statusTimeline.append(head);
+    const bar=document.createElement('div');bar.className='timeline-bar';
+    runs.filter(r=>r.end>r.start).forEach(r=>{const segment=document.createElement('span'),fraction=(r.end-r.start)/total,label=r.state==='off'?'未上榜':r.state==='on'?'上榜':'待确认';segment.className='timeline-segment '+r.state;segment.style.width=`${fraction*100}%`;segment.title=`${label} · ${absenceHours((r.end-r.start)/3600000)} · ${formatDateTime(new Date(r.start).toISOString())} — ${formatDateTime(new Date(r.end).toISOString())}`;if(fraction>=.16)segment.textContent=label;bar.append(segment)});statusTimeline.append(bar);
+    if(Number.isFinite(start)&&Number.isFinite(end)){const dates=document.createElement('div');dates.className='timeline-dates';dates.innerHTML=`<span>${dateLabel(start)}</span><span>${dateLabel(end)}</span>`;statusTimeline.append(dates)}
+   }
+  }
   svg.replaceChildren();const span=currentSpan(),mapT=compressTime?idleWarp.map:(t=>t),unmapT=compressTime?idleWarp.unmap:(t=>t),mapped0=mapT(view.x0),mapped1=mapT(view.x1),mappedSpan=Math.max(1,mapped1-mapped0),x=t=>L+(mapT(t)-mapped0)/mappedSpan*plotW,visibleSeries=series.map(s=>({...s,points:visibleWithNeighbors(s.points,view.x0,view.x1)})),domainSeries=visibleSeries.map(s=>s.points.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v))),fallback=domainSeries.flat().length?domainSeries:series.map(s=>s.points.filter(p=>Number.isFinite(p.v))),visibleCuts=visibleWithNeighbors(cleanCuts,view.x0,view.x1),domainExtras=mode==='score'?visibleCuts.filter(p=>p.t>=view.x0&&p.t<=view.x1&&Number.isFinite(p.v)):[],[d0,d1]=chartDomain([...fallback,domainExtras],mode),y=v=>mode==='rank'?T+(v-d1)/(d0-d1)*(H-T-B):T+(d1-v)/(d1-d0)*(H-T-B);
   const defs=svgEl('defs'),clip=svgEl('clipPath',{id:clipId});clip.append(svgEl('rect',{x:L,y:T,width:plotW,height:H-T-B+absenceLaneHeight}));defs.append(clip);svg.append(defs);
   for(let i=0;i<=4;i++){const value=mode==='rank'?d1+(d0-d1)*i/4:d0+(d1-d0)*i/4,py=y(value);svg.append(svgEl('line',{x1:L,x2:W-R,y1:py,y2:py,stroke:'#e2e6ef'}));svg.append(svgEl('text',{x:L-7,y:py+4,'text-anchor':'end',class:'axis'},String(Math.round(value))))}
@@ -373,7 +401,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
   const middleTime=unmapT((mapped0+mapped1)/2);
   [[view.x0,label(view.x0)],[middleTime,label(middleTime)],[view.x1,label(view.x1)]].forEach(([t,v],i)=>svg.append(svgEl('text',{x:x(t),y:H-9,'text-anchor':i===0?'start':i===2?'end':'middle',class:'axis'},v)));
   const plot=svgEl('g',{'clip-path':`url(#${clipId})`}),cuts=visibleCuts;
-  bands.filter(b=>b.end>=view.x0&&b.start<=view.x1).forEach(b=>{const sx=Math.max(L,x(Math.max(b.start,view.x0))),ex=Math.min(W-R,x(Math.min(b.end,view.x1)));if(ex>sx)plot.append(svgEl('rect',{x:sx,y:T,width:ex-sx,height:H-T-B,fill:'#aeb5c2',opacity:.18}))});
+  bands.filter(b=>b.end>=view.x0&&b.start<=view.x1).forEach(b=>{const sx=Math.max(L,x(Math.max(b.start,view.x0))),ex=Math.min(W-R,x(Math.min(b.end,view.x1)));if(ex>sx){const shade=svgEl('rect',{x:sx,y:T,width:ex-sx,height:H-T-B,fill:'#a0aaba',opacity:rangeMode==='full'?.27:.18});shade.append(svgEl('title',{},`未上榜 ${absenceHours((b.end-b.start)/3600000)}`));plot.append(shade);if(rangeMode==='full'&&ex-sx>180&&showLabels)plot.append(svgEl('text',{x:(sx+ex)/2,y:T+15,'text-anchor':'middle',fill:'#687587','font-size':10,'font-weight':800},`未上榜 ${absenceHours((b.end-b.start)/3600000)}`))}});
   const finiteCuts=cuts.filter(p=>Number.isFinite(p.v));
   if(mode==='score'&&finiteCuts.length>1)plot.append(svgEl('path',{d:pathFrom(finiteCuts,x,y),fill:'none',stroke:'#ed684f','stroke-width':2,'stroke-dasharray':'7 6'}));
   else if(mode==='score'&&finiteCuts.length===1)plot.append(svgEl('line',{x1:L,x2:W-R,y1:y(finiteCuts[0].v),y2:y(finiteCuts[0].v),stroke:'#ed684f','stroke-width':2,'stroke-dasharray':'7 6'}));
@@ -509,7 +537,7 @@ function lineChart(inputSeries,{mode='score',cutoffs=[],bands=[],title='',subtit
  svg.addEventListener('touchmove',e=>{if(wrap.classList.contains('focused'))e.preventDefault()},{passive:false});
  ['gesturestart','gesturechange','gestureend'].forEach(type=>svg.addEventListener(type,e=>{if(wrap.classList.contains('focused'))e.preventDefault()},{passive:false}));
  const outsideInspection=e=>{if(!wrap.isConnected){document.removeEventListener('pointerdown',outsideInspection);return}if(!wrap.contains(e.target))clearInspection()};document.addEventListener('pointerdown',outsideInspection);
- applyRangeMode(rangeMode,false,savedUi.rangeMode===rangeMode?savedUi.view:null);wrap.append(svg);const hint=document.createElement('div');hint.className='chart-focus-hint';hint.textContent=interactive?'大图模式：双指缩放 · 放大后单指拖动 · 双击放大/复位 · × 退出':'当前只有一个有效时间点：大图可查看，但暂不启用缩放/拖动';wrap.append(hint);if(ACTIVE_FOCUS_RANGE_ID===resolvedRangeId)requestAnimationFrame(()=>{if(wrap.isConnected)openFocus()});return wrap;
+ applyRangeMode(rangeMode,false,savedUi.rangeMode===rangeMode?savedUi.view:null);wrap.append(svg);if(statusTimeline)wrap.append(statusTimeline);const hint=document.createElement('div');hint.className='chart-focus-hint';hint.textContent=interactive?'大图模式：双指缩放 · 放大后单指拖动 · 双击放大/复位 · × 退出':'当前只有一个有效时间点：大图可查看，但暂不启用缩放/拖动';wrap.append(hint);if(ACTIVE_FOCUS_RANGE_ID===resolvedRangeId)requestAnimationFrame(()=>{if(wrap.isConnected)openFocus()});return wrap;
 }
 function renderLive(config,live,season){
  if(ACTIVE_FOCUS_CLOSE)ACTIVE_FOCUS_CLOSE(true);
@@ -549,10 +577,11 @@ function renderLive(config,live,season){
   const streamerPlace=placeMap.get(player.id)||null;
   const placeIcon=ambiguous?'⚠️':state.found&&streamerPlace?(STREAMER_PLACE_ICONS[Math.min(3,streamerPlace-1)]||''):'🤡';
   const placeTitle=ambiguous?'官方榜出现多个同名账号，需由仓库所有者确认':state.found&&streamerPlace?`当前仍在榜主播中第${streamerPlace}名（每次按当前分数重新计算）`:(ctx?.manual?'当前官方未上榜；手动分数只参与卡片顺序，不改变小丑状态':'当前官方未上榜；按最近一次在榜顺序与其他未上榜主播排序');
+  const offDuration=currentAbsence(player.id,season,live);
   const placeBadge=`<span class="streamer-place" title="${placeTitle}">${placeIcon}</span>`;
   const highScoreText=Number.isFinite(stats.highScore)?`${fmt(stats.highScore)}分`:'—',bestRankText=Number.isFinite(stats.bestRank)?`第${fmt(stats.bestRank)}名`:'—';
-  const statsHTML=`<div class="season-stats" title="最高分含本季官方记录与手动补录；最佳名次按官方抓取记录；累计将相邻两次都上榜的区间计入，长采集间隔按持续上榜估算，不计未知状态转换区间"><div class="season-stat score"><span>本季最高分</span><b>${highScoreText}</b><small>${monthDay(stats.highScoreAt)}</small></div><div class="season-stat rank"><span>本季最佳名次</span><b>${bestRankText}</b><small>${monthDay(stats.bestRankAt)}</small></div><div class="season-stat hours"><span>上榜累计</span><b>${stats.estimatedMs?'≈':''}${compactHours(stats.onboardMs)}</b><small>&nbsp;</small></div></div>`;
-  card.innerHTML=`<div class="player-title-row"><div class="player-name"><span class="shape-key" style="color:${player.color}">${SHAPE_TEXT[SHAPES[player.id]]}</span> ${displayPlayerName(player)}</div></div><div class="score-line"><div class="score-main">${placeBadge}<div class="score">${exact?fmt(score):'—'}</div></div><div class="score-deltas">${scoreDeltaHTML}</div></div>${knownText?`<div class="score-note" title="${knownText}">${knownText}</div>`:''}<div class="rank-line"><span class="state ${ambiguous?'ambiguous':state.found?'on':'off'}">${ambiguous?'同名待确认':state.found?`第 ${state.rank} 名`:'未上榜'}</span><div class="rank-deltas">${rankDeltaHTML}</div></div>${statsHTML}<div class="meta-row"><span class="gap ${Number.isFinite(gap)&&gap>=0?'up':'down'}">${gapText}</span></div>`;grid.append(card)
+  const statsHTML=`<div class="season-stats" title="最高分含本季官方记录与手动补录；最佳名次按官方抓取记录；累计将相邻两次都上榜的区间计入，长采集间隔按持续上榜估算，不计未知状态转换区间"><div class="season-stat score"><span>本季最高分</span><b>${highScoreText}</b><small>${monthDay(stats.highScoreAt)}</small></div><div class="season-stat rank"><span>本季最佳名次</span><b>${bestRankText}</b><small>${monthDay(stats.bestRankAt)}</small></div><div class="season-stat hours"><span>上榜累计</span><b>${stats.estimatedMs?'≈':''}${compactHours(stats.onboardMs)}</b><small>${stats.estimatedMs?'≈':''}${durationDays(stats.onboardMs/3600000)}天</small></div></div>`;
+  card.innerHTML=`<div class="player-title-row"><div class="player-name"><span class="shape-key" style="color:${player.color}">${SHAPE_TEXT[SHAPES[player.id]]}</span> ${displayPlayerName(player)}</div></div><div class="score-line"><div class="score-main">${placeBadge}<div class="score">${exact?fmt(score):'—'}</div></div><div class="score-deltas">${scoreDeltaHTML}</div></div>${knownText?`<div class="score-note" title="${knownText}">${knownText}</div>`:''}<div class="rank-line"><span class="state ${ambiguous?'ambiguous':state.found?'on':'off'+(offDuration?' has-duration':'')}">${ambiguous?'同名待确认':state.found?`第 ${state.rank} 名`:`未上榜${offDuration?`<small>连续 ${absenceHours(offDuration.hours)}</small>`:''}`}</span><div class="rank-deltas">${rankDeltaHTML}</div></div>${statsHTML}<div class="meta-row"><span class="gap ${Number.isFinite(gap)&&gap>=0?'up':'down'}">${gapText}</span></div>`;grid.append(card)
  });
  const personal=$('#personalCharts');personal.replaceChildren(),cutoffPoints=collapseFlat((live.snapshots||[]).filter(s=>Number(s.season)===season&&Number.isFinite(s.cutoff500)).map(s=>({t:time(s.captured_at),v:Number(s.cutoff500)})));
  config.players.forEach(player=>{const events=playerEvents(player.id,season,live);personal.append(lineChart([{id:player.id,name:player.name,color:player.color,shape:SHAPES[player.id],points:events}],{title:displayPlayerName(player),subtitle:'',cutoffs:cutoffPoints,bands:absenceBands(player.id,season,live),labelMode:'keys',rangeId:`personal:${player.id}:score`,compressIdle:true}))});
