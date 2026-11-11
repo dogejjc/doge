@@ -4,26 +4,43 @@
       "id": "daoge",
       "name": "一本正经的稻哥",
       "color": "#3568e8",
-      "aliases": ["一本正经的稻哥"]
+      "aliases": [
+        "一本正经的稻哥"
+      ]
     },
     {
       "id": "zangmu",
       "name": "最后一只脏牧",
       "color": "#e97831",
-      "aliases": ["最后一只脏牧"]
+      "aliases": [
+        "最后一只脏牧",
+        "最后一只彩笔"
+      ]
     },
     {
       "id": "dayan",
       "name": "我爱李大燕丶",
       "color": "#8b5cf6",
-      "aliases": ["我爱李大燕丶", "我爱李大燕"]
+      "aliases": [
+        "我爱李大燕丶",
+        "我爱李大燕"
+      ]
     },
     {
       "id": "renwurenliu",
       "name": "人五人六",
       "color": "#13a36f",
-      "aliases": ["人五人六"]
+      "aliases": [
+        "人五人六"
+      ]
     }
   ],
-  "alias_history": []
+  "alias_history": [
+    {
+      "player_id": "zangmu",
+      "alias": "最后一只彩笔",
+      "added_at": "2026-11-11T19:14:05+08:00",
+      "entered_by": "owner"
+    }
+  ]
 }
