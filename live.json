@@ -56702,6 +56702,40 @@
           "matched_alias": "人五人六"
         }
       }
+    },
+    {
+      "captured_at": "2026-11-13T03:49:56+08:00",
+      "season": 10,
+      "first_place_score": 8514,
+      "first_place_name": "浅陌",
+      "cutoff500": 5677,
+      "leaderboard_total": 500,
+      "players": {
+        "daoge": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "zangmu": {
+          "found": false,
+          "rank": null,
+          "score": null,
+          "matched_alias": null
+        },
+        "dayan": {
+          "found": true,
+          "rank": 18,
+          "score": 7277,
+          "matched_alias": "我爱李大燕丶"
+        },
+        "renwurenliu": {
+          "found": true,
+          "rank": 158,
+          "score": 6305,
+          "matched_alias": "人五人六"
+        }
+      }
     }
   ],
   "manual_records": [
@@ -56766,11 +56800,11 @@
       "note": "封榜"
     }
   ],
-  "last_checked_at": "2026-11-12T19:54:45+08:00",
+  "last_checked_at": "2026-11-13T03:49:56+08:00",
   "schedule_minutes": [
     7,
     27,
     47
   ],
-  "last_data_change_at": "2026-11-12T19:54:45+08:00"
+  "last_data_change_at": "2026-11-13T03:49:56+08:00"
 }
